@@ -1,0 +1,106 @@
+openapi: 3.1.0
+info:
+  title: Orbit API Gateway
+  version: 0.1.0
+servers:
+  - url: /
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/auth/login:
+    post:
+      summary: Login with email and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Tokens issued
+        "401":
+          description: Invalid credentials
+        "429":
+          description: Rate limit exceeded
+  /api/v1/auth/otp/request:
+    post:
+      summary: Request OTP
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, channel]
+              properties:
+                identifier:
+                  type: string
+                channel:
+                  type: string
+                  enum: [email, sms]
+                correlation_id:
+                  type: string
+      responses:
+        "200":
+          description: OK
+        "429":
+          description: Rate limit exceeded
+  /api/v1/auth/otp/verify:
+    post:
+      summary: Verify OTP
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, channel, code]
+              properties:
+                identifier:
+                  type: string
+                channel:
+                  type: string
+                code:
+                  type: string
+      responses:
+        "200":
+          description: Tokens issued
+        "429":
+          description: Rate limit exceeded
+  /api/v1/auth/token/refresh:
+    post:
+      summary: Refresh access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        "200":
+          description: Tokens issued
+        "401":
+          description: Invalid refresh token
+        "429":
+          description: Rate limit exceeded
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

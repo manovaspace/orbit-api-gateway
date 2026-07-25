@@ -1,0 +1,10 @@
+{
+  "sources": [
+    {
+      "title": "Orbit Gateway",
+      "slug": "gateway",
+      "url": "/api/v1/openapi/gateway.yaml",
+      "default": true
+    }
+  ]
+}
