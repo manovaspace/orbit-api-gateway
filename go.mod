@@ -7,8 +7,8 @@ require (
 	github.com/manovaspace/orbit-auth v0.0.0-20260725231901-117c0fb33e2a
 	github.com/manovaspace/orbit-observability v0.0.0-20260725231019-30ea88222a79
 	github.com/manovaspace/orbit-rate-limiting v0.0.0-20260725230914-744f6d82d009
-	github.com/redis/go-redis/v9 v9.21.0
-	google.golang.org/grpc v1.82.1
+	github.com/redis/go-redis/v9 v9.22.0
+	google.golang.org/grpc v1.83.0
 )
 
 require (
