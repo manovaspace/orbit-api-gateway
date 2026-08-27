@@ -12,9 +12,9 @@ func TestAdminHandlers_ChallengeAndVerify(t *testing.T) {
 	admin := NewAdminHandlers(nil)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/api/v1/admin/challenge":
+		case "/api/v1/system/ownership/challenge", "/api/v1/admin/challenge":
 			admin.Challenge(w, r)
-		case "/api/v1/admin/verify":
+		case "/api/v1/system/ownership/verify", "/api/v1/admin/verify":
 			admin.Verify(w, r)
 		default:
 			http.NotFound(w, r)
@@ -22,13 +22,13 @@ func TestAdminHandlers_ChallengeAndVerify(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// 1. Challenge initiation
+	// 1. Challenge initiation (Canonical)
 	reqBody := AdminChallengeRequest{
 		Email:       "alirezaopmc@gmail.com",
 		DisplayName: "Alireza",
 	}
 	data, _ := json.Marshal(reqBody)
-	resp, err := http.Post(server.URL+"/api/v1/admin/challenge", "application/json", bytes.NewReader(data))
+	resp, err := http.Post(server.URL+"/api/v1/system/ownership/challenge", "application/json", bytes.NewReader(data))
 	if err != nil {
 		t.Fatalf("challenge POST failed: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestAdminHandlers_ChallengeAndVerify(t *testing.T) {
 		Code:  "999999",
 	}
 	badData, _ := json.Marshal(badVerify)
-	badResp, err := http.Post(server.URL+"/api/v1/admin/verify", "application/json", bytes.NewReader(badData))
+	badResp, err := http.Post(server.URL+"/api/v1/system/ownership/verify", "application/json", bytes.NewReader(badData))
 	if err != nil {
 		t.Fatalf("bad verify POST failed: %v", err)
 	}
@@ -69,13 +69,13 @@ func TestAdminHandlers_ChallengeAndVerify(t *testing.T) {
 		t.Errorf("expected status 401 for bad code, got %d", badResp.StatusCode)
 	}
 
-	// 3. Verify with correct code -> 200
+	// 3. Verify with correct code -> 200 (Canonical)
 	goodVerify := AdminVerifyRequest{
 		Email: "alirezaopmc@gmail.com",
 		Code:  item.code,
 	}
 	goodData, _ := json.Marshal(goodVerify)
-	goodResp, err := http.Post(server.URL+"/api/v1/admin/verify", "application/json", bytes.NewReader(goodData))
+	goodResp, err := http.Post(server.URL+"/api/v1/system/ownership/verify", "application/json", bytes.NewReader(goodData))
 	if err != nil {
 		t.Fatalf("good verify POST failed: %v", err)
 	}

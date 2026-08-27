@@ -157,6 +157,134 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/system/ownership/challenge:
+    post:
+      operationId: systemOwnershipChallenge
+      summary: Initiate platform root server ownership challenge (Canonical)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                display_name:
+                  type: string
+      responses:
+        "200":
+          description: OTP challenge dispatched
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, expires_in]
+                properties:
+                  status:
+                    type: string
+                  expires_in:
+                    type: string
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/system/ownership/verify:
+    post:
+      operationId: systemOwnershipVerify
+      summary: Verify root server owner OTP and seal master vault (Canonical)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, code]
+              properties:
+                email:
+                  type: string
+                  format: email
+                code:
+                  type: string
+      responses:
+        "200":
+          description: Owner verified
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, email, key_fingerprint, verified_at]
+                properties:
+                  status:
+                    type: string
+                  email:
+                    type: string
+                  key_fingerprint:
+                    type: string
+                  verified_at:
+                    type: string
+                    format: date-time
+        "401":
+          description: Invalid OTP
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/dev/onboard/claim:
+    post:
+      operationId: devOnboardClaim
+      summary: Claim developer onboarding invite and receive credentials (Canonical)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invite_token, desired_uid]
+              properties:
+                invite_token:
+                  type: string
+                desired_uid:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                display_name:
+                  type: string
+                ssh_public_key:
+                  type: string
+      responses:
+        "200":
+          description: Developer account provisioned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, user, credentials, workspace]
+                properties:
+                  status:
+                    type: string
+                  idempotent_replay:
+                    type: boolean
+                  user:
+                    type: object
+                  credentials:
+                    type: object
+                  workspace:
+                    type: object
+        "400":
+          description: Invalid claim request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /api/v1/admin/challenge:
     post:
       operationId: adminChallenge
