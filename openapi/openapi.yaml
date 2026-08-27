@@ -1,0 +1,325 @@
+openapi: 3.1.0
+info:
+  title: Orbit API Gateway
+  version: 0.1.0
+servers:
+  - url: /
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/auth/login:
+    post:
+      operationId: authLogin
+      summary: Login with email and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                  writeOnly: true
+      responses:
+        "200":
+          description: Tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPair"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/auth/otp/request:
+    post:
+      operationId: authOtpRequest
+      summary: Request OTP
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel]
+              properties:
+                identifier:
+                  type: string
+                  description: Canonical identity (preferred). Falls back to email when empty.
+                email:
+                  type: string
+                  format: email
+                  description: Legacy alias used when identifier is omitted.
+                channel:
+                  type: string
+                  enum: [email, sms]
+                correlation_id:
+                  type: string
+      responses:
+        "200":
+          description: OTP dispatched
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OtpRequestResponse"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/auth/otp/verify:
+    post:
+      operationId: authOtpVerify
+      summary: Verify OTP
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel, code]
+              properties:
+                identifier:
+                  type: string
+                  description: Canonical identity (preferred). Falls back to email when empty.
+                email:
+                  type: string
+                  format: email
+                  description: Legacy alias used when identifier is omitted.
+                channel:
+                  type: string
+                  enum: [email, sms]
+                code:
+                  type: string
+      responses:
+        "200":
+          description: Tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPair"
+        "401":
+          description: Invalid OTP
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/auth/token/refresh:
+    post:
+      operationId: authTokenRefresh
+      summary: Refresh access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+                  writeOnly: true
+      responses:
+        "200":
+          description: Tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPair"
+        "401":
+          description: Invalid refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/admin/challenge:
+    post:
+      operationId: adminChallenge
+      summary: Initiate server owner OTP verification challenge
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                display_name:
+                  type: string
+      responses:
+        "200":
+          description: OTP challenge dispatched
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, expires_in]
+                properties:
+                  status:
+                    type: string
+                  expires_in:
+                    type: string
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/admin/verify:
+    post:
+      operationId: adminVerify
+      summary: Verify owner OTP and issue root admin credentials
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, code]
+              properties:
+                email:
+                  type: string
+                  format: email
+                code:
+                  type: string
+      responses:
+        "200":
+          description: Owner verified
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, email, key_fingerprint, verified_at]
+                properties:
+                  status:
+                    type: string
+                  email:
+                    type: string
+                  key_fingerprint:
+                    type: string
+                  verified_at:
+                    type: string
+                    format: date-time
+        "401":
+          description: Invalid OTP
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/onboard/claim:
+    post:
+      operationId: onboardClaim
+      summary: Claim developer onboarding invite and receive credentials
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invite_token, desired_uid]
+              properties:
+                invite_token:
+                  type: string
+                desired_uid:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                display_name:
+                  type: string
+                ssh_public_key:
+                  type: string
+      responses:
+        "200":
+          description: Developer account provisioned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, user, credentials, workspace]
+                properties:
+                  status:
+                    type: string
+                  idempotent_replay:
+                    type: boolean
+                  user:
+                    type: object
+                  credentials:
+                    type: object
+                  workspace:
+                    type: object
+        "400":
+          description: Invalid claim request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    TokenPair:
+      type: object
+      required:
+        - access_token
+        - refresh_token
+        - expires_at
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+          description: Access token expiry (ISO 8601)
+    OtpRequestResponse:
+      type: object
+      required:
+        - expires_at
+      properties:
+        expires_at:
+          type: string
+          format: date-time
+          description: OTP expiry (ISO 8601)
+    ErrorEnvelope:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
