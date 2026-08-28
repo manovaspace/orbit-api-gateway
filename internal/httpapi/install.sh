@@ -284,9 +284,10 @@ elif [ "$CONFIGURE_ALIAS" = true ] && [ ${#ALREADY_CONFIGURED[@]} -gt 0 ]; then
 fi
 
 echo -e "  ${BOLD}Get started:${RESET}"
-echo -e "    ${CYAN}o onboard${RESET}    ${GRAY}# Interactive onboarding wizard${RESET}"
-echo -e "    ${CYAN}o doctor${RESET}     ${GRAY}# Verify system prerequisites${RESET}"
-echo -e "    ${CYAN}o version${RESET}    ${GRAY}# Check installed version${RESET}\n"
+echo -e "    ${CYAN}o admin init${RESET}  ${GRAY}# Platform owner (this machine vault)${RESET}"
+echo -e "    ${CYAN}o onboard${RESET}     ${GRAY}# Invitee wizard (token from orbit invite)${RESET}"
+echo -e "    ${CYAN}o doctor${RESET}      ${GRAY}# Verify system prerequisites${RESET}"
+echo -e "    ${CYAN}o version${RESET}     ${GRAY}# Check installed version${RESET}\n"
 
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;

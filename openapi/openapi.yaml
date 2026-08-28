@@ -160,7 +160,10 @@ paths:
   /api/v1/system/ownership/challenge:
     post:
       operationId: systemOwnershipChallenge
-      summary: Initiate platform root server ownership challenge (Canonical)
+      summary: Initiate in-memory platform owner OTP (no email)
+      description: >
+        Stores a 6-digit code in gateway process memory for 10 minutes.
+        Does not send Mailcow or notification email. Status is `challenge_dispatched`.
       security: []
       requestBody:
         required: true
@@ -197,7 +200,10 @@ paths:
   /api/v1/system/ownership/verify:
     post:
       operationId: systemOwnershipVerify
-      summary: Verify root server owner OTP and seal master vault (Canonical)
+      summary: Verify in-memory owner OTP
+      description: >
+        Checks the in-memory challenge. Does not persist an owner vault.
+        `key_fingerprint` is a hash of email, code, and timestamp — not a signing secret.
       security: []
       requestBody:
         required: true
@@ -288,7 +294,7 @@ paths:
   /api/v1/admin/challenge:
     post:
       operationId: adminChallenge
-      summary: Initiate server owner OTP verification challenge
+      summary: Alias for in-memory owner OTP (no email)
       security: []
       requestBody:
         required: true
@@ -325,7 +331,7 @@ paths:
   /api/v1/admin/verify:
     post:
       operationId: adminVerify
-      summary: Verify owner OTP and issue root admin credentials
+      summary: Alias for in-memory owner OTP verify
       security: []
       requestBody:
         required: true
