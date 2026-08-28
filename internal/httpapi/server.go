@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	_ "embed"
 	"net/http"
 
 	observability "github.com/manovaspace/orbit-observability"
@@ -8,6 +9,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+//go:embed install.sh
+var canonicalInstallScript []byte
 
 type Server struct {
 	mux *http.ServeMux
@@ -31,10 +35,12 @@ func NewServer(auth *AuthHandlers, rl *RateLimitConfig) *Server {
 	onboard := NewOnboardHandlers(rl)
 
 	// Global Identity & Auth
-	mux.HandleFunc("POST /api/v1/auth/otp/request", wrap("auth_otp_request", auth.RequestOTP))
-	mux.HandleFunc("POST /api/v1/auth/otp/verify", wrap("auth_otp_verify", auth.VerifyOTP))
-	mux.HandleFunc("POST /api/v1/auth/login", wrap("auth_password", auth.Login))
-	mux.HandleFunc("POST /api/v1/auth/token/refresh", wrap("auth_refresh", auth.RefreshToken))
+	if auth != nil {
+		mux.HandleFunc("POST /api/v1/auth/otp/request", wrap("auth_otp_request", auth.RequestOTP))
+		mux.HandleFunc("POST /api/v1/auth/otp/verify", wrap("auth_otp_verify", auth.VerifyOTP))
+		mux.HandleFunc("POST /api/v1/auth/login", wrap("auth_password", auth.Login))
+		mux.HandleFunc("POST /api/v1/auth/token/refresh", wrap("auth_refresh", auth.RefreshToken))
+	}
 
 	// Canonical System & Infrastructure Plane (Platform Ownership)
 	mux.HandleFunc("POST /api/v1/system/ownership/challenge", wrap("system_ownership_challenge", admin.Challenge))
@@ -48,6 +54,21 @@ func NewServer(auth *AuthHandlers, rl *RateLimitConfig) *Server {
 	mux.HandleFunc("POST /api/v1/admin/verify", wrap("admin_verify", admin.Verify))
 	mux.HandleFunc("POST /api/v1/onboard/claim", wrap("onboard_claim", onboard.Claim))
 	mux.HandleFunc("POST /v1/onboard/claim", wrap("onboard_claim", onboard.Claim))
+
+	// Canonical Installer
+	handleInstall := func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" && r.URL.Path != "/install" && r.URL.Path != "/install.sh" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(canonicalInstallScript)
+	}
+	mux.HandleFunc("GET /", handleInstall)
+	mux.HandleFunc("GET /install", handleInstall)
+	mux.HandleFunc("GET /install.sh", handleInstall)
 
 	registerOpenAPIRoutes(mux)
 	return &Server{mux: mux}
