@@ -20,7 +20,23 @@ export DEPLOYMENT_ENVIRONMENT=dev
 go run ./cmd/gateway
 ```
 
-Default HTTP: `localhost:10120` · health: `localhost:10121`
+## Endpoints
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/api/v1/auth/otp/request` | Proxies to `orbit-auth` `RequestOTP` |
+| `POST` | `/api/v1/auth/otp/verify` | Proxies to `orbit-auth` `VerifyOTP` |
+| `POST` | `/api/v1/auth/login` | Proxies to `orbit-auth` `LoginWithPassword` |
+| `POST` | `/api/v1/auth/token/refresh` | Proxies to `orbit-auth` `RefreshToken` |
+| `POST` | `/api/v1/system/ownership/challenge` | Generate 6-digit platform owner challenge OTP (alias: `/api/v1/admin/challenge`) |
+| `POST` | `/api/v1/system/ownership/verify` | Verify owner challenge & return fingerprint (alias: `/api/v1/admin/verify`) |
+| `POST` | `/api/v1/dev/onboard/claim` | Workstation onboarding claim (aliases: `/api/v1/onboard/claim`, `/v1/onboard/claim`; supports `Idempotency-Key` header) |
+| `GET` | `/` | Serves raw canonical `install.sh` shell script (`text/x-shellscript`) |
+| `GET` | `/api/v1/openapi/gateway.yaml` | OpenAPI 3.1 specification schema |
+| `GET` | `/api/v1/openapi/manifest.json` | API gateway discovery manifest |
+| `GET` | `/healthz`, `/readyz` | Liveness & readiness on dedicated health port `10121` (`HEALTH_PORT`) |
+
+Default HTTP API: `localhost:10120` (`HTTP_PORT`) · Health: `localhost:10121` (`HEALTH_PORT`).
 
 ## Documentation
 

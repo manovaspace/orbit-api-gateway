@@ -20,12 +20,30 @@ The spec includes stable `operationId` values (`authLogin`, `authOtpRequest`, `a
 
 Agent routing: `openapi` / `orbit-api-gateway` in `handbook/cursor/agent-routing.yaml`.
 
+## Endpoints
+
+| Method | Path | Role |
+| --- | --- | --- |
+| `POST` | `/api/v1/auth/otp/request` | Upstream `orbit-auth` RequestOTP |
+| `POST` | `/api/v1/auth/otp/verify` | Upstream `orbit-auth` VerifyOTP |
+| `POST` | `/api/v1/auth/login` | Upstream `orbit-auth` LoginWithPassword |
+| `POST` | `/api/v1/auth/token/refresh` | Upstream `orbit-auth` RefreshToken |
+| `POST` | `/api/v1/system/ownership/challenge` | Generate 6-digit platform owner challenge OTP (alias: `/api/v1/admin/challenge`) |
+| `POST` | `/api/v1/system/ownership/verify` | Verify owner challenge & return fingerprint (alias: `/api/v1/admin/verify`) |
+| `POST` | `/api/v1/dev/onboard/claim` | Workstation onboarding claim (aliases: `/api/v1/onboard/claim`, `/v1/onboard/claim`; supports `Idempotency-Key` header) |
+| `GET` | `/` | Canonical installer script (`text/x-shellscript`) |
+| `GET` | `/api/v1/openapi/gateway.yaml` | OpenAPI 3.1 specification schema |
+| `GET` | `/api/v1/openapi/manifest.json` | API gateway discovery manifest |
+| `GET` | `/healthz`, `/readyz` | Liveness & readiness on dedicated health port `10121` (`HEALTH_PORT`) |
+
 ## Commands
 
 ```bash
 export AUTH_GRPC_ADDR=localhost:10100
 export JWT_SECRET=dev-insecure-change-me
 export DEPLOYMENT_ENVIRONMENT=dev
+export HTTP_PORT=10120
+export HEALTH_PORT=10121
 go run ./cmd/gateway
 go test ./...
 ```
