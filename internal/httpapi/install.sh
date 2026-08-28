@@ -9,7 +9,7 @@ if [ -z "${ORBIT_VERSION:-}" ]; then
   if [ -n "$LATEST_TAG" ]; then
     VERSION="$LATEST_TAG"
   else
-    VERSION="v0.4.3"
+    VERSION="v0.4.4"
   fi
 else
   VERSION="$ORBIT_VERSION"
