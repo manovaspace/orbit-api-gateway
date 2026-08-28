@@ -57,7 +57,7 @@ func NewServer(auth *AuthHandlers, rl *RateLimitConfig) *Server {
 
 	// Canonical Installer
 	handleInstall := func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" && r.URL.Path != "/install" && r.URL.Path != "/install.sh" {
+		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
 		}
@@ -67,8 +67,6 @@ func NewServer(auth *AuthHandlers, rl *RateLimitConfig) *Server {
 		_, _ = w.Write(canonicalInstallScript)
 	}
 	mux.HandleFunc("GET /", handleInstall)
-	mux.HandleFunc("GET /install", handleInstall)
-	mux.HandleFunc("GET /install.sh", handleInstall)
 
 	registerOpenAPIRoutes(mux)
 	return &Server{mux: mux}
