@@ -163,7 +163,7 @@ paths:
       summary: Initiate in-memory platform owner OTP (no email)
       description: >
         Stores a 6-digit code in gateway process memory for 10 minutes.
-        Does not send Mailcow or notification email. Status is `challenge_dispatched`.
+        Does not send SMTP or notification email. Status is `challenge_dispatched`.
       security: []
       requestBody:
         required: true
