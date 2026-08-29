@@ -9,7 +9,7 @@ if [ -z "${ORBIT_VERSION:-}" ]; then
   if [ -n "$LATEST_TAG" ]; then
     VERSION="$LATEST_TAG"
   else
-    VERSION="v0.4.5"
+    VERSION="v0.4.6"
   fi
 else
   VERSION="$ORBIT_VERSION"
@@ -176,6 +176,26 @@ if [ "$USE_SUDO" = true ]; then
 else
   ln -sf "orbit${EXT}" "${INSTALL_DIR}/o${EXT}" 2>/dev/null || true
 fi
+
+# Clean up any legacy shell profile alias configuration from previous versions
+CLEAN_PROFILES=(
+  "${HOME}/.bashrc"
+  "${HOME}/.bash_profile"
+  "${HOME}/.zshrc"
+  "${HOME}/.profile"
+  "${HOME}/.config/fish/config.fish"
+)
+
+for rc in "${CLEAN_PROFILES[@]}"; do
+  if [ -f "$rc" ] && [ -w "$rc" ]; then
+    if grep -q -E "(# Orbit CLI shortcut|alias o=[\"']?orbit[\"']?)" "$rc" 2>/dev/null; then
+      tmp_rc="$(mktemp)"
+      grep -v -E "(# Orbit CLI shortcut|alias o=[\"']?orbit[\"']?)" "$rc" > "$tmp_rc" || true
+      cat "$tmp_rc" > "$rc"
+      rm -f "$tmp_rc"
+    fi
+  fi
+done
 
 # Direct execution if non-flag arguments passed
 NON_FLAG_ARGS=()
