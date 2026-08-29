@@ -9,7 +9,7 @@ if [ -z "${ORBIT_VERSION:-}" ]; then
   if [ -n "$LATEST_TAG" ]; then
     VERSION="$LATEST_TAG"
   else
-    VERSION="v0.4.6"
+    VERSION="v0.4.7"
   fi
 else
   VERSION="$ORBIT_VERSION"
@@ -215,6 +215,8 @@ echo -e "  ${BOLD}Commands:${RESET}      ${CYAN}orbit${RESET}, ${CYAN}o${RESET}\
 
 echo -e "  ${BOLD}Get started:${RESET}"
 echo -e "    ${CYAN}o admin init${RESET}  ${GRAY}# Platform owner (this machine vault)${RESET}"
+echo -e "    ${CYAN}o invite create <email>${RESET}  ${GRAY}# Signed onboarding token${RESET}"
+echo -e "    ${CYAN}o staff create --uid … --forward …${RESET}  ${GRAY}# Directory (needs orbit-staff)${RESET}"
 echo -e "    ${CYAN}o onboard${RESET}     ${GRAY}# Invitee wizard (token from orbit invite)${RESET}"
 echo -e "    ${CYAN}o doctor${RESET}      ${GRAY}# Verify system prerequisites${RESET}"
 echo -e "    ${CYAN}o version${RESET}     ${GRAY}# Check installed version${RESET}\n"
