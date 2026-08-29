@@ -49,9 +49,9 @@ func TestServer_InstallerEndpoints(t *testing.T) {
 			t.Errorf("expected interactive installation prompt in script")
 		}
 
-		// Verify alias configuration prompt is present
-		if !strings.Contains(body, "Configure 'o=orbit' shortcut alias in your shell profiles?") {
-			t.Errorf("expected interactive alias configuration prompt in script")
+		// Verify binary symlink shortcut is present
+		if !strings.Contains(body, "(binary symlink)") {
+			t.Errorf("expected binary symlink shortcut in script")
 		}
 	})
 }
