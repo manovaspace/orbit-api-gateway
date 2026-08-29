@@ -1,6 +1,6 @@
 # orbit-api-gateway — Agent Guide
 
-REST edge for Orbit Tier 2 — auth proxy, rate limits, OpenAPI discovery. **Product routes are not mounted in this binary** (Kaazhe and other backends serve their own HTTP until a future proxy lands).
+REST edge for Orbit Tier 2 — auth proxy, rate limits, OpenAPI discovery. **Product routes are not mounted in this binary** (product backends serve their own HTTP until a future proxy lands).
 
 Status: `beta`.
 
