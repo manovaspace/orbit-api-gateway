@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
     branches: [main]
 
@@ -10,4 +11,3 @@ jobs:
   ci:
     uses: manova/orbit-infra/.forgejo/workflows/go-ci.yml@main
     secrets: inherit
-

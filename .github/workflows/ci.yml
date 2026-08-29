@@ -26,10 +26,15 @@ jobs:
       - name: Checkout sibling replace modules
         run: |
           set -euo pipefail
-          mapfile -t siblings < <(grep -E '=> \.\./orbit-' go.mod | sed -E 's/.*=> \.\.\/(orbit-[^ ]+).*/\1/' | sort -u || true)
-          for name in "${siblings[@]:-}"; do
-            [ -z "$name" ] && continue
-            dest="../${name}"
+          mapfile -t dests < <(grep -E '=>[[:space:]]+\.\./' go.mod | sed -E 's/.*=>[[:space:]]*([^[:space:]]+).*/\1/' | sort -u || true)
+          for dest in "${dests[@]:-}"; do
+            [ -z "$dest" ] && continue
+            name="$(basename "$dest")"
+            case "$name" in
+              orbit-*) ;;
+              *) continue ;;
+            esac
+            mkdir -p "$(dirname "$dest")"
             if [ ! -d "$dest/.git" ] && [ ! -f "$dest/go.mod" ]; then
               echo "Cloning ${name} -> ${dest}"
               git clone --depth 1 "https://github.com/manovaspace/${name}.git" "$dest"
@@ -40,7 +45,9 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.7.0
+          govulncheck ./...
       - uses: golangci/golangci-lint-action@9fae48acfc02a90574d7c304a1758ef9895495fa # v7.0.1
         with:
           version: v2.1.6
