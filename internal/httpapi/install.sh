@@ -9,7 +9,7 @@ if [ -z "${ORBIT_VERSION:-}" ]; then
   if [ -n "$LATEST_TAG" ]; then
     VERSION="$LATEST_TAG"
   else
-    VERSION="v0.4.7"
+    VERSION="v0.5.0"
   fi
 else
   VERSION="$ORBIT_VERSION"
@@ -205,14 +205,6 @@ for rc in "${CLEAN_PROFILES[@]}"; do
   fi
 done
 
-case ":$PATH:" in
-  *":$INSTALL_DIR:"*) ;;
-  *)
-    echo "Error: ~/.local/bin is not on PATH (add export PATH=\"\$HOME/.local/bin:\$PATH\" to ~/.zshrc)" >&2
-    exit 1
-    ;;
-esac
-
 # Direct execution if non-flag arguments passed
 NON_FLAG_ARGS=()
 for arg in "$@"; do
@@ -224,6 +216,14 @@ done
 if [ ${#NON_FLAG_ARGS[@]} -gt 0 ]; then
   exec "${INSTALL_DIR}/orbit" "${NON_FLAG_ARGS[@]}"
 fi
+
+case ":$PATH:" in
+  *":$INSTALL_DIR:"*) ;;
+  *)
+    echo "Error: ~/.local/bin is not on PATH (add export PATH=\"\$HOME/.local/bin:\$PATH\" to ~/.zshrc)" >&2
+    exit 1
+    ;;
+esac
 
 echo -e "  ${GREEN}✔${RESET} ${BOLD}Orbit ${VERSION} installed successfully!${RESET}\n"
 echo -e "  ${BOLD}Installed to:${RESET}  ${INSTALL_DIR}/orbit"
