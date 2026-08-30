@@ -7,12 +7,12 @@ INSTALL_DIR="${HOME}/.local/bin"
 if [ -z "${ORBIT_VERSION:-}" ]; then
   LATEST_TAG="$(curl -fsSL https://api.github.com/repos/${REPO}/releases/latest 2>/dev/null | grep '"tag_name":' | head -n 1 | cut -d '"' -f 4 || true)"
   if [ -n "$LATEST_TAG" ]; then
-    VERSION="$LATEST_TAG"
+    ORBIT_RELEASE_VERSION="$LATEST_TAG"
   else
-    VERSION="v0.5.1"
+    ORBIT_RELEASE_VERSION="v0.5.2"
   fi
 else
-  VERSION="$ORBIT_VERSION"
+  ORBIT_RELEASE_VERSION="$ORBIT_VERSION"
 fi
 
 # Host constraints
@@ -124,7 +124,7 @@ if [ ! -t 1 ] || [ -n "${NO_COLOR:-}" ]; then
 fi
 
 echo -e "\n${BOLD}${BLUE}Orbit Platform CLI Installer${RESET}\n"
-echo -e "  ${BOLD}Version:${RESET}      ${CYAN}${VERSION}${RESET}"
+echo -e "  ${BOLD}Version:${RESET}      ${CYAN}${ORBIT_RELEASE_VERSION}${RESET}"
 echo -e "  ${BOLD}Platform:${RESET}     linux / amd64"
 echo -e "  ${BOLD}Destination:${RESET}  ${INSTALL_DIR}/orbit"
 echo -e "  ${BOLD}Shortcuts:${RESET}    ${INSTALL_DIR}/o ${GRAY}(binary symlink)${RESET}\n"
@@ -170,7 +170,7 @@ TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 ORBIT_BIN="orbit-linux-amd64"
-BASE_URL="https://github.com/${REPO}/releases/download/${VERSION}"
+BASE_URL="https://github.com/${REPO}/releases/download/${ORBIT_RELEASE_VERSION}"
 
 # Download binaries
 echo -e "  ${GRAY}↓ Downloading release binaries from GitHub...${RESET}"
@@ -225,7 +225,7 @@ case ":$PATH:" in
     ;;
 esac
 
-echo -e "  ${GREEN}✔${RESET} ${BOLD}Orbit ${VERSION} installed successfully!${RESET}\n"
+echo -e "  ${GREEN}✔${RESET} ${BOLD}Orbit ${ORBIT_RELEASE_VERSION} installed successfully!${RESET}\n"
 echo -e "  ${BOLD}Installed to:${RESET}  ${INSTALL_DIR}/orbit"
 echo -e "  ${BOLD}Commands:${RESET}      ${CYAN}orbit${RESET}, ${CYAN}o${RESET}\n"
 
