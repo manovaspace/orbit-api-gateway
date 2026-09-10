@@ -406,7 +406,7 @@ func TestDualAuth_MissingSecret(t *testing.T) {
 func TestAuthHandlers_Endpoints(t *testing.T) {
 	fakeClient := &fakeAuthServiceClient{
 		requestOTPFn: func(ctx context.Context, in *authv1.RequestOTPRequest, opts ...grpc.CallOption) (*authv1.RequestOTPResponse, error) {
-			if in.Email == "invalid@example.com" {
+			if in.Email == "invalid@example.com" { //nolint:staticcheck // SA1019: Email tested for backward compatibility
 				return nil, errors.New("user not found")
 			}
 			return &authv1.RequestOTPResponse{ExpiresAt: "2026-08-30T23:59:59Z"}, nil

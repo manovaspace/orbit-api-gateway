@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 type OnboardClaimRequest struct {
@@ -92,7 +95,7 @@ func (h *OnboardHandlers) Claim(w http.ResponseWriter, r *http.Request) {
 	}
 	displayName := strings.TrimSpace(body.DisplayName)
 	if displayName == "" {
-		displayName = strings.Title(uid)
+		displayName = cases.Title(language.Und).String(uid)
 	}
 
 	tokenHash := sha256.Sum256([]byte(token + ":" + uid))

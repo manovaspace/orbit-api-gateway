@@ -32,7 +32,7 @@ func TestAdminHandlers_ChallengeAndVerify(t *testing.T) {
 	if err != nil {
 		t.Fatalf("challenge POST failed: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp.StatusCode)
@@ -64,7 +64,7 @@ func TestAdminHandlers_ChallengeAndVerify(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bad verify POST failed: %v", err)
 	}
-	defer badResp.Body.Close()
+	defer func() { _ = badResp.Body.Close() }()
 	if badResp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("expected status 401 for bad code, got %d", badResp.StatusCode)
 	}
@@ -79,7 +79,7 @@ func TestAdminHandlers_ChallengeAndVerify(t *testing.T) {
 	if err != nil {
 		t.Fatalf("good verify POST failed: %v", err)
 	}
-	defer goodResp.Body.Close()
+	defer func() { _ = goodResp.Body.Close() }()
 	if goodResp.StatusCode != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", goodResp.StatusCode)
 	}
@@ -119,7 +119,7 @@ func TestOnboardHandlers_Claim(t *testing.T) {
 	if err != nil {
 		t.Fatalf("claim request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", resp.StatusCode)
@@ -148,7 +148,7 @@ func TestOnboardHandlers_Claim(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second claim request failed: %v", err)
 	}
-	defer resp2.Body.Close()
+	defer func() { _ = resp2.Body.Close() }()
 
 	var claimResp2 OnboardClaimResponse
 	_ = json.NewDecoder(resp2.Body).Decode(&claimResp2)

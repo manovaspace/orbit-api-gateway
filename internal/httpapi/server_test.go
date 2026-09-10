@@ -18,7 +18,7 @@ func TestServer_InstallerEndpoints(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GET / failed: %v", err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("expected 200 OK, got %d", resp.StatusCode)
@@ -77,7 +77,7 @@ func TestServer_UnmappedRoutes(t *testing.T) {
 			if err != nil {
 				t.Fatalf("GET %s failed: %v", path, err)
 			}
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			if resp.StatusCode != http.StatusNotFound {
 				t.Errorf("expected 404 Not Found for %s, got %d", path, resp.StatusCode)

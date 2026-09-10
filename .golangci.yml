@@ -9,3 +9,9 @@ linters:
     - staticcheck
     - unused
 
+linters-settings:
+  staticcheck:
+    checks:
+      - "all"
+      - "-SA1019"
+

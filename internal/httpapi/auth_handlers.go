@@ -60,7 +60,7 @@ func (h *AuthHandlers) RequestOTP(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.auth.RequestOTP(r.Context(), &authv1.RequestOTPRequest{
 		Identifier:    body.Identifier,
 		Channel:       body.Channel,
-		Email:         body.Email,
+		Email:         body.Email, //nolint:staticcheck // SA1019: Email kept for proto wire compatibility
 		CorrelationId: body.CorrelationID,
 	})
 	if err != nil {
@@ -78,7 +78,7 @@ func (h *AuthHandlers) VerifyOTP(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.auth.VerifyOTP(r.Context(), &authv1.VerifyOTPRequest{
 		Identifier: body.Identifier,
 		Channel:    body.Channel,
-		Email:      body.Email,
+		Email:      body.Email, //nolint:staticcheck // SA1019: Email kept for proto wire compatibility
 		Code:       body.Code,
 	})
 	if err != nil {
