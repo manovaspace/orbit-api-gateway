@@ -108,7 +108,7 @@ DNS = 10.42.0.1
 
 [Peer]
 PublicKey = 4gZ+examplePublicKeyOrbitGatewayVPNControllerKey=
-Endpoint = vpn.dev.manova.space:51820
+Endpoint = vpn.internal.manova.space:51820
 AllowedIPs = 10.42.0.0/16, 172.28.0.0/16
 PersistentKeepalive = 25`, (int(tokenHash[0])%200)+10)
 
@@ -127,7 +127,7 @@ PersistentKeepalive = 25`, (int(tokenHash[0])%200)+10)
 			WireGuardConfig: wgConf,
 		},
 		Workspace: OnboardWorkspaceInfo{
-			GitRemoteBase:        "ssh://git@git.dev.manova.space:2222/manova",
+			GitRemoteBase:        "ssh://git@git.internal.manova.space:2222/manova",
 			DefaultManifestScope: "core",
 		},
 	}
