@@ -8,9 +8,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/golang-jwt/jwt/v5"
-
 	authv1 "github.com/manovaspace/orbit-auth/api/auth/v1"
+	orbittoken "github.com/manovaspace/orbit-auth/token"
 )
 
 type AuthHandlers struct {
@@ -132,27 +131,43 @@ func (h *AuthHandlers) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func jwtSecret() (string, error) {
-	secret := os.Getenv("JWT_SECRET")
-	if secret != "" {
-		return secret, nil
+func jwtKeySet() (orbittoken.KeySet, error) {
+	directory := strings.TrimSpace(os.Getenv("JWT_PUBLIC_KEYS_DIR"))
+	if directory == "" {
+		return nil, fmt.Errorf("JWT_PUBLIC_KEYS_DIR is required")
 	}
-	if os.Getenv("DEPLOYMENT_ENVIRONMENT") == "dev" {
-		return "dev-insecure-change-me", nil
-	}
-	return "", fmt.Errorf("JWT_SECRET is required")
+	return orbittoken.LoadKeySet(directory)
+}
+
+// ValidateJWTVerificationKey checks the configured key at process startup.
+func ValidateJWTVerificationKey() error {
+	_, err := jwtKeySet()
+	return err
+}
+
+// JWKSHandler publishes the configured public verification key set.
+func JWKSHandler() http.Handler {
+	keys, keyErr := jwtKeySet()
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if keyErr != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "auth misconfigured"})
+			return
+		}
+		w.Header().Set("Content-Type", "application/jwk-set+json")
+		w.Header().Set("Cache-Control", "public, max-age=300")
+		_ = json.NewEncoder(w).Encode(keys.Document())
+	})
 }
 
 type scopeKey struct{}
 
 func DualAuth(auth authv1.AuthServiceClient, next http.Handler) http.Handler {
+	keys, keyErr := jwtKeySet()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		secret, err := jwtSecret()
-		if err != nil {
+		if keyErr != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "auth misconfigured"})
 			return
 		}
-		key := []byte(secret)
 		authz := r.Header.Get("Authorization")
 		if !strings.HasPrefix(authz, "Bearer ") {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
@@ -176,18 +191,12 @@ func DualAuth(auth authv1.AuthServiceClient, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
-		claims := jwt.MapClaims{}
-		token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (any, error) {
-			if t.Method != jwt.SigningMethodHS256 {
-				return nil, fmt.Errorf("unexpected alg")
-			}
-			return key, nil
-		}, jwt.WithValidMethods([]string{"HS256"}))
-		if err != nil || !token.Valid {
+		claims, err := orbittoken.ParseAccessToken(tokenStr, keys)
+		if err != nil {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
 			return
 		}
-		sub, _ := claims["sub"].(string)
+		sub := claims.Subject
 		r.Header.Set("X-User-Id", sub)
 		ctx := context.WithValue(r.Context(), userIDKey{}, sub)
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -212,11 +221,11 @@ func scopesAllow(r *http.Request, scopes []string) bool {
 	return false
 }
 
-// JWTAuth validates HS256 JWTs only (tests / simple routes).
+// JWTAuth validates RS256 JWTs only (tests / simple routes).
 func JWTAuth(next http.Handler) http.Handler {
+	keys, keyErr := jwtKeySet()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		secret, err := jwtSecret()
-		if err != nil {
+		if keyErr != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "auth misconfigured"})
 			return
 		}
@@ -226,18 +235,12 @@ func JWTAuth(next http.Handler) http.Handler {
 			return
 		}
 		tokenStr := strings.TrimPrefix(authz, "Bearer ")
-		claims := jwt.MapClaims{}
-		token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (any, error) {
-			if t.Method != jwt.SigningMethodHS256 {
-				return nil, fmt.Errorf("unexpected alg")
-			}
-			return []byte(secret), nil
-		}, jwt.WithValidMethods([]string{"HS256"}))
-		if err != nil || !token.Valid {
+		claims, err := orbittoken.ParseAccessToken(tokenStr, keys)
+		if err != nil {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
 			return
 		}
-		sub, _ := claims["sub"].(string)
+		sub := claims.Subject
 		ctx := context.WithValue(r.Context(), userIDKey{}, sub)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

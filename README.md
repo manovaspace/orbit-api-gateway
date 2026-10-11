@@ -15,10 +15,19 @@ Requires [orbit-auth](https://github.com/manovaspace/orbit-auth) on gRPC and Red
 
 ```bash
 export AUTH_GRPC_ADDR=localhost:10100
-export JWT_SECRET=dev-insecure-change-me
+export JWT_PUBLIC_KEYS_DIR=./secrets/jwt-public-keys
 export DEPLOYMENT_ENVIRONMENT=dev
 go run ./cmd/gateway
 ```
+
+The gateway verifies Orbit Auth RS256 access tokens using public PEM files in
+`JWT_PUBLIC_KEYS_DIR` and publishes them at `/.well-known/jwks.json`. Name each
+PEM `<kid>.pem`. It does not receive the signing private key.
+
+For key rotation, add the new `<kid>.pem` while retaining the current key, then
+restart the gateway before switching Orbit Auth to the new private key and
+`JWT_ACTIVE_KEY_ID`. Keep the old public key until existing access tokens and
+JWKS caches have expired; see the shared [token package guide](../orbit-auth/token/README.md).
 
 ## Endpoints
 
@@ -28,6 +37,7 @@ go run ./cmd/gateway
 | `POST` | `/api/v1/auth/otp/verify` | Proxies to `orbit-auth` `VerifyOTP` |
 | `POST` | `/api/v1/auth/login` | Proxies to `orbit-auth` `LoginWithPassword` |
 | `POST` | `/api/v1/auth/token/refresh` | Proxies to `orbit-auth` `RefreshToken` |
+| `GET` | `/.well-known/jwks.json` | Publishes public RS256 verification keys for Orbit access tokens |
 | `POST` | `/api/v1/system/ownership/challenge` | In-memory 6-digit OTP (10m TTL). **Does not send email.** Alias: `/api/v1/admin/challenge` |
 | `POST` | `/api/v1/system/ownership/verify` | Verify in-memory code; fingerprint is not a signing secret. Alias: `/api/v1/admin/verify` |
 | `POST` | `/api/v1/dev/onboard/claim` | Workstation onboarding claim (aliases: `/api/v1/onboard/claim`, `/v1/onboard/claim`; supports `Idempotency-Key` header) |

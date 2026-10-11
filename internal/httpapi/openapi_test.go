@@ -14,6 +14,7 @@ var platformOpenAPIRoutes = []struct {
 	path   string
 	opID   string
 }{
+	{"get", "/.well-known/jwks.json", "getOrbitJWKS"},
 	{"post", "/api/v1/auth/login", "authLogin"},
 	{"post", "/api/v1/auth/otp/request", "authOtpRequest"},
 	{"post", "/api/v1/auth/otp/verify", "authOtpVerify"},

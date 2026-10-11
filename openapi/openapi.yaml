@@ -7,6 +7,39 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  /.well-known/jwks.json:
+    get:
+      operationId: getOrbitJWKS
+      summary: Get public Orbit Auth signing keys
+      description: Public RSA keys for verifying Orbit Auth access tokens. The signing private key is never published.
+      security: []
+      responses:
+        "200":
+          description: JSON Web Key Set
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+          content:
+            application/jwk-set+json:
+              schema:
+                type: object
+                required: [keys]
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+                      required: [kty, use, alg, kid, n, e]
+                      properties:
+                        kty: { type: string, const: RSA }
+                        use: { type: string, const: sig }
+                        alg: { type: string, const: RS256 }
+                        kid: { type: string }
+                        n: { type: string }
+                        e: { type: string }
+        "500":
+          description: Key configuration unavailable
   /api/v1/auth/login:
     post:
       operationId: authLogin

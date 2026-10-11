@@ -40,7 +40,7 @@ Agent routing: `openapi` / `orbit-api-gateway` in `handbook/cursor/agent-routing
 
 ```bash
 export AUTH_GRPC_ADDR=localhost:10100
-export JWT_SECRET=dev-insecure-change-me
+export JWT_PUBLIC_KEYS_DIR=./secrets/jwt-public-keys
 export DEPLOYMENT_ENVIRONMENT=dev
 export HTTP_PORT=10120
 export HEALTH_PORT=10121

@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"os"
 
-	observability "github.com/manovaspace/orbit-observability"
-	ratelimiting "github.com/manovaspace/orbit-rate-limiting"
 	"github.com/manovaspace/orbit-api-gateway/internal/httpapi"
 	authclient "github.com/manovaspace/orbit-api-gateway/internal/infrastructure/auth"
+	observability "github.com/manovaspace/orbit-observability"
+	ratelimiting "github.com/manovaspace/orbit-rate-limiting"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -19,8 +19,12 @@ func main() {
 	}
 	log := observability.Logger()
 
-	if os.Getenv("JWT_SECRET") == "" && os.Getenv("DEPLOYMENT_ENVIRONMENT") != "dev" {
-		log.Error("JWT_SECRET is required outside DEPLOYMENT_ENVIRONMENT=dev")
+	if os.Getenv("JWT_PUBLIC_KEYS_DIR") == "" {
+		log.Error("JWT_PUBLIC_KEYS_DIR is required")
+		os.Exit(1)
+	}
+	if err := httpapi.ValidateJWTVerificationKey(); err != nil {
+		log.Error("JWT verification key is invalid", "error", err)
 		os.Exit(1)
 	}
 

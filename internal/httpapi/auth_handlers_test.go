@@ -3,6 +3,8 @@ package httpapi
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -10,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"google.golang.org/grpc"
 
 	authv1 "github.com/manovaspace/orbit-auth/api/auth/v1"
@@ -98,7 +99,7 @@ func (f *fakeAuthServiceClient) ValidateApiToken(ctx context.Context, in *authv1
 }
 
 func TestDualAuth_ApiTokenScopes(t *testing.T) {
-	t.Setenv("JWT_SECRET", "test-secret-dual-auth")
+	configureJWTTestKeys(t)
 
 	tokens := map[string]*authv1.ValidateApiTokenResponse{
 		"oat_read_only": {
@@ -262,32 +263,14 @@ func TestDualAuth_ApiTokenScopes(t *testing.T) {
 }
 
 func TestDualAuth_JWT(t *testing.T) {
-	secret := []byte("test-dual-auth-jwt-secret")
-	t.Setenv("JWT_SECRET", "test-dual-auth-jwt-secret")
-
-	validToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": "jwt-user-456",
-		"exp": time.Now().Add(1 * time.Hour).Unix(),
-	}).SignedString(secret)
+	privateKey := configureJWTTestKeys(t)
+	validToken := signJWTTestToken(t, privateKey, "jwt-user-456", time.Now().Add(time.Hour))
+	expiredToken := signJWTTestToken(t, privateKey, "jwt-user-456", time.Now().Add(-time.Hour))
+	wrongKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		t.Fatalf("failed to create valid jwt: %v", err)
+		t.Fatal(err)
 	}
-
-	expiredToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": "jwt-user-456",
-		"exp": time.Now().Add(-1 * time.Hour).Unix(),
-	}).SignedString(secret)
-	if err != nil {
-		t.Fatalf("failed to create expired jwt: %v", err)
-	}
-
-	wrongKeyToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": "jwt-user-456",
-		"exp": time.Now().Add(1 * time.Hour).Unix(),
-	}).SignedString([]byte("wrong-key"))
-	if err != nil {
-		t.Fatalf("failed to create wrong key jwt: %v", err)
-	}
+	wrongKeyToken := signJWTTestToken(t, wrongKey, "jwt-user-456", time.Now().Add(time.Hour))
 
 	fakeClient := &fakeAuthServiceClient{}
 
@@ -384,7 +367,7 @@ func TestDualAuth_JWT(t *testing.T) {
 }
 
 func TestDualAuth_MissingSecret(t *testing.T) {
-	t.Setenv("JWT_SECRET", "")
+	t.Setenv("JWT_PUBLIC_KEYS_DIR", "")
 	t.Setenv("DEPLOYMENT_ENVIRONMENT", "production")
 
 	fakeClient := &fakeAuthServiceClient{}
@@ -399,7 +382,7 @@ func TestDualAuth_MissingSecret(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("expected status 500 when JWT_SECRET missing in prod, got %d", rec.Code)
+		t.Errorf("expected status 500 when JWT public keys are missing in prod, got %d", rec.Code)
 	}
 }
 

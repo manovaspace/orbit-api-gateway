@@ -1,41 +1,63 @@
 package httpapi
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
+	orbittoken "github.com/manovaspace/orbit-auth/token"
 )
 
+var gatewayJWTTestKeyOnce sync.Once
+var gatewayJWTTestKey *rsa.PrivateKey
+var gatewayJWTTestKeyErr error
+
+func configureJWTTestKeys(t *testing.T) *rsa.PrivateKey {
+	t.Helper()
+	gatewayJWTTestKeyOnce.Do(func() {
+		gatewayJWTTestKey, gatewayJWTTestKeyErr = rsa.GenerateKey(rand.Reader, 2048)
+	})
+	if gatewayJWTTestKeyErr != nil {
+		t.Fatal(gatewayJWTTestKeyErr)
+	}
+	publicDER, err := x509.MarshalPKIXPublicKey(&gatewayJWTTestKey.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "test-key.pem"), pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: publicDER}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("JWT_PUBLIC_KEYS_DIR", directory)
+	return gatewayJWTTestKey
+}
+
+func signJWTTestToken(t *testing.T, key *rsa.PrivateKey, subject string, expires time.Time) string {
+	t.Helper()
+	token, err := orbittoken.SignAccessToken(key, "test-key", subject, expires)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return token
+}
+
 func TestJWTAuth_Matrix(t *testing.T) {
-	secret := []byte("test-secret-key-12345")
-	t.Setenv("JWT_SECRET", "test-secret-key-12345")
-
-	validToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": "user-123",
-		"exp": time.Now().Add(1 * time.Hour).Unix(),
-	}).SignedString(secret)
+	privateKey := configureJWTTestKeys(t)
+	validToken := signJWTTestToken(t, privateKey, "user-123", time.Now().Add(time.Hour))
+	expiredToken := signJWTTestToken(t, privateKey, "user-123", time.Now().Add(-time.Hour))
+	wrongKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
-		t.Fatalf("failed to create valid token: %v", err)
+		t.Fatal(err)
 	}
-
-	expiredToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": "user-123",
-		"exp": time.Now().Add(-1 * time.Hour).Unix(),
-	}).SignedString(secret)
-	if err != nil {
-		t.Fatalf("failed to create expired token: %v", err)
-	}
-
-	wrongKeyToken, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": "user-123",
-		"exp": time.Now().Add(1 * time.Hour).Unix(),
-	}).SignedString([]byte("wrong-secret-key-99999"))
-	if err != nil {
-		t.Fatalf("failed to create wrong key token: %v", err)
-	}
+	wrongKeyToken := signJWTTestToken(t, wrongKey, "user-123", time.Now().Add(time.Hour))
 
 	tests := []struct {
 		name           string
@@ -135,7 +157,7 @@ func TestJWTAuth_Matrix(t *testing.T) {
 }
 
 func TestJWTAuth_MissingSecret(t *testing.T) {
-	t.Setenv("JWT_SECRET", "")
+	t.Setenv("JWT_PUBLIC_KEYS_DIR", "")
 	t.Setenv("DEPLOYMENT_ENVIRONMENT", "production")
 
 	handler := JWTAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -149,6 +171,6 @@ func TestJWTAuth_MissingSecret(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("expected status 500 when JWT_SECRET is missing in prod, got %d", rec.Code)
+		t.Errorf("expected status 500 when JWT public keys are missing in prod, got %d", rec.Code)
 	}
 }

@@ -25,6 +25,7 @@ func NewServer(auth *AuthHandlers, rl *RateLimitConfig) *Server {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
+	mux.Handle("GET /.well-known/jwks.json", JWKSHandler())
 	wrap := func(class string, h http.HandlerFunc) http.HandlerFunc {
 		if rl == nil {
 			return h
