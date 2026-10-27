@@ -26,7 +26,7 @@ go run ./cmd/gateway
 | --- | --- | --- |
 | `POST` | `/api/v1/auth/otp/request` | Proxies to `orbit-auth` `RequestOTP` |
 | `POST` | `/api/v1/auth/otp/verify` | Proxies to `orbit-auth` `VerifyOTP` |
-| `POST` | `/api/v1/auth/login` | Proxies to `orbit-auth` `LoginWithPassword` |
+| `POST` | `/api/v1/auth/login` | Proxies to `orbit-auth` `LoginWithPassword` (`identifier`: email or E.164 mobile; `email` deprecated) |
 | `POST` | `/api/v1/auth/token/refresh` | Proxies to `orbit-auth` `RefreshToken` |
 | `POST` | `/api/v1/system/ownership/challenge` | In-memory 6-digit OTP (10m TTL). **Does not send email.** Alias: `/api/v1/admin/challenge` |
 | `POST` | `/api/v1/system/ownership/verify` | Verify in-memory code; fingerprint is not a signing secret. Alias: `/api/v1/admin/verify` |
