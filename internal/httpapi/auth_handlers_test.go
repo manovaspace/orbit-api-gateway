@@ -540,3 +540,33 @@ func TestAuthHandlers_Endpoints(t *testing.T) {
 		}
 	})
 }
+
+func TestLogin_IdentifierMapping(t *testing.T) {
+	cases := []struct {
+		name string
+		body loginBody
+		want string
+	}{
+		{"mobile identifier", loginBody{Identifier: "+989121234567", Password: "p"}, "+989121234567"},
+		{"legacy email field", loginBody{Email: "user@example.com", Password: "p"}, "user@example.com"},
+		{"identifier wins over email", loginBody{Identifier: "+989121234567", Email: "user@example.com", Password: "p"}, "+989121234567"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got string
+			client := &fakeAuthServiceClient{
+				loginWithPasswordFn: func(_ context.Context, in *authv1.LoginWithPasswordRequest, _ ...grpc.CallOption) (*authv1.TokenResponse, error) {
+					got = in.GetIdentifier()
+					return &authv1.TokenResponse{AccessToken: "a", RefreshToken: "r", ExpiresAt: "2026-08-30T23:59:59Z"}, nil
+				},
+			}
+			body, _ := json.Marshal(tc.body)
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+			rec := httptest.NewRecorder()
+			NewAuthHandlers(client, nil).Login(rec, req)
+			if rec.Code != http.StatusOK || got != tc.want {
+				t.Fatalf("status %d identifier %q, want 200 %q", rec.Code, got, tc.want)
+			}
+		})
+	}
+}

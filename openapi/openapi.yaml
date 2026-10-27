@@ -10,7 +10,7 @@ paths:
   /api/v1/auth/login:
     post:
       operationId: authLogin
-      summary: Login with email and password
+      summary: Login with email or mobile number and password
       security: []
       requestBody:
         required: true
@@ -18,11 +18,19 @@ paths:
           application/json:
             schema:
               type: object
-              required: [email, password]
+              required: [password]
+              oneOf:
+                - required: [identifier]
+                - required: [email]
               properties:
+                identifier:
+                  type: string
+                  description: Email address or E.164 mobile number (for example +989121234567).
                 email:
                   type: string
                   format: email
+                  deprecated: true
+                  description: Deprecated alias for identifier.
                 password:
                   type: string
                   format: password
