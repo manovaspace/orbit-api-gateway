@@ -26,6 +26,7 @@ go run ./cmd/gateway
 | --- | --- | --- |
 | `POST` | `/api/v1/auth/otp/request` | Proxies to `orbit-auth` `RequestOTP` |
 | `POST` | `/api/v1/auth/otp/verify` | Proxies to `orbit-auth` `VerifyOTP` |
+| `GET` | `/.well-known/jwks.json` | Public access-token keys from `JWT_PUBLIC_KEYS_DIR` |
 | `POST` | `/api/v1/auth/login` | Proxies to `orbit-auth` `LoginWithPassword` (`identifier`: email or E.164 mobile; `email` deprecated) |
 | `POST` | `/api/v1/auth/token/refresh` | Proxies to `orbit-auth` `RefreshToken` |
 | `POST` | `/api/v1/system/ownership/challenge` | In-memory 6-digit OTP (10m TTL). **Does not send email.** Alias: `/api/v1/admin/challenge` |

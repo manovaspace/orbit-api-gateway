@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 
+	orbittoken "github.com/manovaspace/orbit-auth/token"
 	observability "github.com/manovaspace/orbit-observability"
 	ratelimiting "github.com/manovaspace/orbit-rate-limiting"
 	"github.com/manovaspace/orbit-api-gateway/internal/httpapi"
@@ -50,6 +51,18 @@ func main() {
 	}
 	rl := httpapi.NewRateLimitConfig(lim)
 	srv := httpapi.NewServer(httpapi.NewAuthHandlers(auth.API(), rl), rl)
+	if dir := os.Getenv("JWT_PUBLIC_KEYS_DIR"); dir != "" {
+		keys, err := orbittoken.LoadKeySet(dir)
+		if err != nil {
+			log.Error("jwks keys failed", "error", err)
+			os.Exit(1)
+		}
+		srv.ServeJWKS(keys)
+		log.Info("jwks published", "keys", len(keys))
+	} else if os.Getenv("DEPLOYMENT_ENVIRONMENT") != "dev" {
+		log.Error("JWT_PUBLIC_KEYS_DIR is required outside DEPLOYMENT_ENVIRONMENT=dev")
+		os.Exit(1)
+	}
 
 	httpPort := envOr("HTTP_PORT", "10120")
 	healthPort := envOr("HEALTH_PORT", "10121")
