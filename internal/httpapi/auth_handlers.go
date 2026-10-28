@@ -41,8 +41,9 @@ type refreshBody struct {
 }
 
 type loginBody struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Identifier string `json:"identifier"`
+	Email      string `json:"email"`
+	Password   string `json:"password"`
 }
 
 func (h *AuthHandlers) RequestOTP(w http.ResponseWriter, r *http.Request) {
@@ -98,9 +99,13 @@ func (h *AuthHandlers) Login(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
+	identifier := body.Identifier
+	if identifier == "" {
+		identifier = body.Email
+	}
 	resp, err := h.auth.LoginWithPassword(r.Context(), &authv1.LoginWithPasswordRequest{
-		Email:    body.Email,
-		Password: body.Password,
+		Identifier: identifier,
+		Password:   body.Password,
 	})
 	if err != nil {
 		writeGRPCError(w, err)

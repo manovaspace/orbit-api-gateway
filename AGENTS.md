@@ -26,7 +26,7 @@ Agent routing: `openapi` / `orbit-api-gateway` in `handbook/cursor/agent-routing
 | --- | --- | --- |
 | `POST` | `/api/v1/auth/otp/request` | Upstream `orbit-auth` RequestOTP |
 | `POST` | `/api/v1/auth/otp/verify` | Upstream `orbit-auth` VerifyOTP |
-| `POST` | `/api/v1/auth/login` | Upstream `orbit-auth` LoginWithPassword |
+| `POST` | `/api/v1/auth/login` | Upstream `orbit-auth` LoginWithPassword (`identifier`: email or E.164 mobile) |
 | `POST` | `/api/v1/auth/token/refresh` | Upstream `orbit-auth` RefreshToken |
 | `POST` | `/api/v1/system/ownership/challenge` | In-memory 6-digit OTP (10m TTL). **Does not send email.** Alias: `/api/v1/admin/challenge` |
 | `POST` | `/api/v1/system/ownership/verify` | Verify in-memory code; fingerprint is not a signing secret. Alias: `/api/v1/admin/verify` |
