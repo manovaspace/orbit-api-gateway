@@ -7,9 +7,9 @@ require (
 	github.com/manovaspace/orbit-auth v0.0.0
 	github.com/manovaspace/orbit-observability v0.0.0
 	github.com/manovaspace/orbit-rate-limiting v0.0.0
-	github.com/redis/go-redis/v9 v9.22.0
-	golang.org/x/text v0.42.0
-	google.golang.org/grpc v1.83.2
+	github.com/redis/go-redis/v9 v9.23.0
+	golang.org/x/text v0.43.0
+	google.golang.org/grpc v1.84.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -34,7 +34,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.46.0 // indirect
 	go.opentelemetry.io/otel/trace v1.46.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
-	go.uber.org/atomic v1.11.0 // indirect
+	go.uber.org/atomic v1.12.0 // indirect
 	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260819154853-08b0e4226688 // indirect
