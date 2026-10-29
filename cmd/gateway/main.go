@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/manovaspace/orbit-api-gateway/internal/httpapi"
+	authclient "github.com/manovaspace/orbit-api-gateway/internal/infrastructure/auth"
 	orbittoken "github.com/manovaspace/orbit-auth/token"
 	observability "github.com/manovaspace/orbit-observability"
 	ratelimiting "github.com/manovaspace/orbit-rate-limiting"
-	"github.com/manovaspace/orbit-api-gateway/internal/httpapi"
-	authclient "github.com/manovaspace/orbit-api-gateway/internal/infrastructure/auth"
 	"github.com/redis/go-redis/v9"
 )
 
