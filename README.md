@@ -7,7 +7,7 @@ Public REST edge for Orbit Tier 2 — auth proxy, JWT validation helpers, rate-l
 
 Part of the [Manova / Orbit](https://github.com/manovaspace) open toolkit.
 
-Product-specific API routes are not bundled here; register them in your deployment binary, gateway plugins, or edge reverse-proxy config.
+Product-specific API routes are not bundled here; register them in your deployment binary, gateway plugins, or edge reverse-proxy config. The gateway itself does not proxy or stream: it answers auth, ownership, onboarding and static assets.
 
 ## Quick start (dev)
 
@@ -19,6 +19,8 @@ export JWT_SECRET=dev-insecure-change-me
 export DEPLOYMENT_ENVIRONMENT=dev
 go run ./cmd/gateway
 ```
+
+HTTP runs on **Fiber v3** fronting the same `net/http` handlers as before, so routes, status codes, headers and bodies are unchanged. `internal/infrastructure/httpapi/contract_test.go` holds the contract captured from the previous server.
 
 ## Endpoints
 
@@ -38,6 +40,40 @@ go run ./cmd/gateway
 | `GET` | `/healthz`, `/readyz` | Liveness & readiness on dedicated health port `10121` (`HEALTH_PORT`) |
 
 Default HTTP API: `localhost:10120` (`HTTP_PORT`) · Health: `localhost:10121` (`HEALTH_PORT`).
+
+## Layout
+
+```
+cmd/gateway/                        wiring only: env, adapters, servers
+internal/domain/                    edge types and ports (AuthService, Limiter, Clock,
+                                    CodeGenerator, ChallengeStore, ClaimCache, Assets)
+internal/application/               auth, ownership, onboarding, asset and rate-limit
+                                    use cases
+internal/infrastructure/
+  assets/                           embedded installer, OpenAPI artifacts
+  auth/                             orbit-auth gRPC adapter and status mapping
+  clock/                            system clock adapter
+  httpapi/                          Fiber v3 edge and health server (net/http handlers)
+  ids/                              six-digit challenge codes
+  jwks/                             public verification key document
+  memory/                           in-process challenge and claim stores
+  ratelimit/                        orbit-rate-limiting adapter
+```
+
+The domain imports no infrastructure package. The application layer receives
+every dependency through `application.Deps`, and `cmd/` only wires adapters.
+`.golangci.yml` `depguard` rules enforce both boundaries.
+
+## Development
+
+```bash
+go test ./... -race -count=1
+```
+
+Tests use fakes and an in-process gRPC stand-in, so they need no service. The
+service stores nothing outside the process: there is no Postgres, no
+migrations, no sqlc and no event bus. See [AGENTS.md](./AGENTS.md) for the full
+configuration list.
 
 ## Documentation
 

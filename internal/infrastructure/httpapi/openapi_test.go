@@ -7,8 +7,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// platformOpenAPIRoutes must stay aligned with NewServer auth registrations
-// (excluding /healthz and /api/v1/openapi/*).
+// platformOpenAPIRoutes must stay aligned with the New registrations
+// (excluding /healthz, the installer and /api/v1/openapi/*).
 var platformOpenAPIRoutes = []struct {
 	method string
 	path   string
@@ -36,36 +36,36 @@ type openAPIDoc struct {
 }
 
 func TestOpenAPISpecParity(t *testing.T) {
-	b, err := os.ReadFile("../../openapi/openapi.yaml")
+	body, err := os.ReadFile("../../../openapi/openapi.yaml")
 	if err != nil {
 		t.Fatalf("read openapi.yaml: %v", err)
 	}
 
 	var doc openAPIDoc
-	if err := yaml.Unmarshal(b, &doc); err != nil {
+	if err := yaml.Unmarshal(body, &doc); err != nil {
 		t.Fatalf("parse openapi.yaml: %v", err)
 	}
 
 	for _, want := range platformOpenAPIRoutes {
-		ops, ok := doc.Paths[want.path]
+		operations, ok := doc.Paths[want.path]
 		if !ok {
 			t.Errorf("openapi.yaml missing path %q", want.path)
 			continue
 		}
-		op, ok := ops[want.method]
+		operation, ok := operations[want.method]
 		if !ok {
 			t.Errorf("openapi.yaml missing %s %s", want.method, want.path)
 			continue
 		}
-		if op.OperationID != want.opID {
-			t.Errorf("%s %s: operationId=%q want %q", want.method, want.path, op.OperationID, want.opID)
+		if operation.OperationID != want.opID {
+			t.Errorf("%s %s: operationId=%q want %q", want.method, want.path, operation.OperationID, want.opID)
 		}
 	}
 
 	for path, methods := range doc.Paths {
 		for method := range methods {
 			if !isDocumentedPlatformRoute(method, path) {
-				t.Errorf("openapi.yaml has undocumented platform route %s %s (add to NewServer + platformOpenAPIRoutes)", method, path)
+				t.Errorf("openapi.yaml has undocumented platform route %s %s (add to New + platformOpenAPIRoutes)", method, path)
 			}
 		}
 	}
@@ -78,8 +78,8 @@ func TestOpenAPISpecParity(t *testing.T) {
 }
 
 func isDocumentedPlatformRoute(method, path string) bool {
-	for _, r := range platformOpenAPIRoutes {
-		if r.method == method && r.path == path {
+	for _, route := range platformOpenAPIRoutes {
+		if route.method == method && route.path == path {
 			return true
 		}
 	}

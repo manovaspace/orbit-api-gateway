@@ -12,13 +12,30 @@ REST edge for Orbit Tier 2 — auth proxy, rate limits, OpenAPI discovery. **Pro
 
 Status: `beta`.
 
+## Architecture
+
+- `internal/domain` — the edge's types and ports: `AuthService` (upstream orbit-auth), `Limiter`, `Clock`, `CodeGenerator`, `ChallengeStore`, `ClaimCache`, `Assets`. It imports no infrastructure package, HTTP framework, environment or proto.
+- `internal/application` — the auth, ownership, onboarding, static-asset and rate-limit use cases. It receives `application.Deps` and reads no environment variable.
+- `internal/infrastructure` — adapters: `httpapi` (Fiber v3 edge and health server), `auth` (orbit-auth gRPC), `ratelimit` (orbit-rate-limiting memory/Redis), `memory` (challenge and claim stores), `assets` (embedded installer, OpenAPI artifacts), `jwks`, `clock`, `ids`.
+- `cmd/gateway` — wiring only.
+- `.golangci.yml` `depguard` rules enforce both boundaries. Do not weaken them to land a change.
+
+Three paths are deliberately absent: no Postgres (so no migrations, no sqlc and no database integration tier), no event transport (Redis is used only for rate limiting, never for events), and no proxy or streaming route — the edge answers auth, ownership, onboarding and static assets only.
+
+## HTTP
+
+- Fiber v3 fronts the same `net/http` handlers this service ran before. Routing, status codes, headers and bodies are unchanged; `internal/infrastructure/httpapi/contract_test.go` holds the HTTP contract captured from the old `net/http` server, and its assertions were not edited for the migration.
+- `adaptor.HTTPHandler` keeps `http.ServeMux` semantics (405 `Allow`, 404 bodies, the `GET /` installer catch-all) instead of Fiber's router.
+- Timeouts: read 30s, write 30s, idle 60s. JSON bodies are capped at 64 KiB in the handlers; the Fiber `BodyLimit` (4 MiB) only bounds what the HTTP front buffers first, so keep it well above the handler cap.
+- Response framing (chunked vs `Content-Length`, `Date`) comes from the server, not the handlers, and is not part of the contract.
+
 ## Contracts
 
 Public HTTP is **OpenAPI-first**. Commit the OpenAPI artifact under `openapi/`; serve it at `/api/v1/openapi/gateway.yaml`. Scalar handbook/infra embedding is **planned** — do not hand-maintain endpoint tables.
 
 The spec includes stable `operationId` values (`authLogin`, `authOtpRequest`, `authOtpVerify`, `authTokenRefresh`) and shared schemas (`TokenPair`, `OtpRequestResponse`, `ErrorEnvelope`). **Do not rename operationIds** without coordinating `@orbit/contracts` codegen in orbit-frontend (vendor + regenerate).
 
-`internal/httpapi/openapi_test.go` parses the YAML and asserts path/method/`operationId` parity with `platformOpenAPIRoutes` (keep that table aligned with `NewServer` auth registrations).
+`internal/infrastructure/httpapi/openapi_test.go` parses the YAML and asserts path/method/`operationId` parity with `platformOpenAPIRoutes` (keep that table aligned with `New` auth registrations).
 
 | Topic | Path |
 | --- | --- |
@@ -44,6 +61,13 @@ Agent routing: `openapi` / `orbit-api-gateway` in `handbook/cursor/agent-routing
 | `GET` | `/api/v1/openapi/manifest.json` | API gateway discovery manifest |
 | `GET` | `/healthz`, `/readyz` | Liveness & readiness on dedicated health port `10121` (`HEALTH_PORT`) |
 
+## Configuration
+
+- **Auth upstream:** `AUTH_GRPC_ADDR` (default `localhost:10100`).
+- **Rate limiting:** `REDIS_ADDR` selects the Redis limiter; without it `DEPLOYMENT_ENVIRONMENT=dev` uses the memory limiter and anything else refuses to start. `RATE_LIMIT_TRUST_PROXY=true` reads the client address from `X-Forwarded-For`.
+- **Tokens:** `JWT_SECRET` is required outside dev (`dev-insecure-change-me` in dev). `JWT_PUBLIC_KEYS_DIR` publishes `/.well-known/jwks.json`; it is required outside dev.
+- **Ports:** `HTTP_PORT` (default `10120`), `HEALTH_PORT` (default `10121`).
+
 ## Commands
 
 ```bash
@@ -53,7 +77,15 @@ export DEPLOYMENT_ENVIRONMENT=dev
 export HTTP_PORT=10120
 export HEALTH_PORT=10121
 go run ./cmd/gateway
-go test ./...
+go test ./... -race -count=1
 ```
 
-See [README](./README.md) and [.env.example](./.env.example).
+Tests use fakes and an in-process gRPC stand-in; none needs a service. There are no
+database integration tests, so there is no release-check tier and no
+`.github/allowed-skips.txt`. See [README](./README.md) and [.env.example](./.env.example).
+
+## Storage and events
+
+- No Postgres, no migrations, no SQL and no `docs/migrations.md`: nothing in this service persists beyond the process.
+- Ownership challenges and onboarding claims live in `internal/infrastructure/memory` behind `domain.ChallengeStore` and `domain.ClaimCache`; both are lost on restart, exactly as before.
+- No events. The service publishes and consumes nothing; do not wire `messagebus.Bus` without an ADR change.

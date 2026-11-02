@@ -2,15 +2,23 @@ package main
 
 import (
 	"context"
-	"net/http"
 	"os"
+	"strings"
 
-	"github.com/manovaspace/orbit-api-gateway/internal/httpapi"
-	authclient "github.com/manovaspace/orbit-api-gateway/internal/infrastructure/auth"
-	orbittoken "github.com/manovaspace/orbit-auth/token"
 	observability "github.com/manovaspace/orbit-observability"
 	ratelimiting "github.com/manovaspace/orbit-rate-limiting"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/manovaspace/orbit-api-gateway/internal/application"
+	"github.com/manovaspace/orbit-api-gateway/internal/domain"
+	"github.com/manovaspace/orbit-api-gateway/internal/infrastructure/assets"
+	"github.com/manovaspace/orbit-api-gateway/internal/infrastructure/auth"
+	"github.com/manovaspace/orbit-api-gateway/internal/infrastructure/clock"
+	"github.com/manovaspace/orbit-api-gateway/internal/infrastructure/httpapi"
+	"github.com/manovaspace/orbit-api-gateway/internal/infrastructure/ids"
+	"github.com/manovaspace/orbit-api-gateway/internal/infrastructure/jwks"
+	"github.com/manovaspace/orbit-api-gateway/internal/infrastructure/memory"
+	"github.com/manovaspace/orbit-api-gateway/internal/infrastructure/ratelimit"
 )
 
 func main() {
@@ -27,39 +35,54 @@ func main() {
 
 	authAddr := envOr("AUTH_GRPC_ADDR", "localhost:10100")
 	dialOpts := append(observability.GRPCDialOptions(), observability.InternalAuthDialOption())
-	auth, err := authclient.NewClient(authAddr, dialOpts...)
+	authClient, err := auth.NewClient(authAddr, dialOpts...)
 	if err != nil {
 		log.Error("auth client failed", "error", err)
 		os.Exit(1)
 	}
 
-	var lim ratelimiting.Limiter
+	var limiter domain.Limiter
 	if addr := os.Getenv("REDIS_ADDR"); addr != "" {
 		rdb := redis.NewClient(&redis.Options{Addr: addr})
 		if err := rdb.Ping(ctx).Err(); err != nil {
 			log.Error("redis ping failed", "error", err)
 			os.Exit(1)
 		}
-		lim = ratelimiting.NewRedisLimiter(rdb)
+		limiter = ratelimit.New(ratelimiting.NewRedisLimiter(rdb))
 		log.Info("rate limiting enabled", "redis", addr)
 	} else if os.Getenv("DEPLOYMENT_ENVIRONMENT") == "dev" {
-		lim = ratelimiting.NewMemoryLimiter()
+		limiter = ratelimit.New(ratelimiting.NewMemoryLimiter())
 		log.Info("rate limiting using memory limiter (dev, no REDIS_ADDR)")
 	} else {
 		log.Error("REDIS_ADDR is required outside DEPLOYMENT_ENVIRONMENT=dev")
 		os.Exit(1)
 	}
-	rl := httpapi.NewRateLimitConfig(lim)
-	srv := httpapi.NewServer(httpapi.NewAuthHandlers(auth.API(), rl), rl)
+
+	svc := application.NewService(application.Deps{
+		Auth:       authClient,
+		Limiter:    limiter,
+		Clock:      clock.New(),
+		Codes:      ids.New(),
+		Challenges: memory.NewChallenges(),
+		Claims:     memory.NewClaims(),
+		Assets:     assets.New("openapi"),
+		Logger:     func(msg string, args ...any) { log.Info(msg, args...) },
+	})
+
+	dev := os.Getenv("DEPLOYMENT_ENVIRONMENT") == "dev"
+	srv := httpapi.New(svc, httpapi.Options{
+		TrustProxy: strings.EqualFold(os.Getenv("RATE_LIMIT_TRUST_PROXY"), "true"),
+		JWTSecret:  resolveJWTSecret(os.Getenv("JWT_SECRET"), dev),
+	})
 	if dir := os.Getenv("JWT_PUBLIC_KEYS_DIR"); dir != "" {
-		keys, err := orbittoken.LoadKeySet(dir)
+		doc, err := jwks.Load(dir)
 		if err != nil {
 			log.Error("jwks keys failed", "error", err)
 			os.Exit(1)
 		}
-		srv.ServeJWKS(keys)
-		log.Info("jwks published", "keys", len(keys))
-	} else if os.Getenv("DEPLOYMENT_ENVIRONMENT") != "dev" {
+		srv.ServeJWKS(doc.Body())
+		log.Info("jwks published", "keys", doc.Keys())
+	} else if !dev {
 		log.Error("JWT_PUBLIC_KEYS_DIR is required outside DEPLOYMENT_ENVIRONMENT=dev")
 		os.Exit(1)
 	}
@@ -67,35 +90,43 @@ func main() {
 	httpPort := envOr("HTTP_PORT", "10120")
 	healthPort := envOr("HEALTH_PORT", "10121")
 
-	mainServer := httpapi.NewHTTPServer(":"+httpPort, srv.Handler())
-	healthMux := http.NewServeMux()
-	healthMux.Handle("/healthz", observability.HealthHandler())
-	healthMux.Handle("/readyz", observability.ReadinessHandler())
-	healthServer := httpapi.NewHTTPServer(":"+healthPort, observability.HTTPMiddleware(healthMux))
+	healthServer := httpapi.NewHealth()
 
 	go func() {
 		log.Info("http listening", "port", httpPort)
-		if err := mainServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := srv.Listen(":" + httpPort); err != nil {
 			log.Error("http failed", "error", err)
 		}
 	}()
 	go func() {
-		if err := healthServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := healthServer.Listen(":" + healthPort); err != nil {
 			log.Error("health failed", "error", err)
 		}
 	}()
 
 	observability.WaitForSignal(observability.ShutdownConfig{
-		HTTPServer: mainServer,
 		OnShutdown: []func(context.Context) error{
-			func(context.Context) error {
-				return healthServer.Shutdown(ctx)
-			},
-			func(context.Context) error {
-				return auth.Close()
-			},
+			srv.Shutdown,
+			healthServer.Shutdown,
+			func(context.Context) error { return authClient.Close() },
 		},
 	})
+}
+
+// devInsecureJWTSecret is the fallback the edge has always used in dev when
+// JWT_SECRET is unset.
+const devInsecureJWTSecret = "dev-insecure-change-me"
+
+// resolveJWTSecret applies the dev fallback. Outside dev an empty secret is
+// already a startup error, so the middleware never sees one.
+func resolveJWTSecret(secret string, dev bool) string {
+	if secret != "" {
+		return secret
+	}
+	if dev {
+		return devInsecureJWTSecret
+	}
+	return ""
 }
 
 func envOr(key, fallback string) string {
