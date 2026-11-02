@@ -31,6 +31,16 @@ HTTP runs on **Fiber v3** fronting the same `net/http` handlers as before, so ro
 | `GET` | `/.well-known/jwks.json` | Public access-token keys from `JWT_PUBLIC_KEYS_DIR` |
 | `POST` | `/api/v1/auth/login` | Proxies to `orbit-auth` `LoginWithPassword` (`identifier`: email or E.164 mobile; `email` deprecated) |
 | `POST` | `/api/v1/auth/token/refresh` | Proxies to `orbit-auth` `RefreshToken` |
+| `POST` | `/api/v1/auth/signup` | Proxies to `orbit-auth` `SignupService.RegisterWithEmail`. Unauthenticated; same 202 for new and existing addresses; disabled sign-up answers 404 |
+| `POST` | `/api/v1/auth/signup/verify` | Proxies to `orbit-auth` `SignupService.VerifySignup`; returns a token pair |
+| `GET` | `/api/v1/orgs` | Proxies to `orbit-auth` `OrgService.ListMyOrgs` (bearer access token) |
+| `POST` | `/api/v1/orgs` | Proxies to `orbit-auth` `OrgService.CreateOrg` (`name`) |
+| `GET` | `/api/v1/orgs/{org_id}/members` | Proxies to `orbit-auth` `OrgService.ListMembers` (non-member is 404) |
+| `POST` | `/api/v1/orgs/{org_id}/invites` | Proxies to `orbit-auth` `OrgService.InviteMember` (`email`) |
+| `GET` | `/api/v1/orgs/{org_id}/invites` | Proxies to `orbit-auth` `OrgService.ListInvites` |
+| `DELETE` | `/api/v1/orgs/{org_id}/invites/{invite_id}` | Proxies to `orbit-auth` `OrgService.RevokeInvite` |
+| `POST` | `/api/v1/invites/accept` | Proxies to `orbit-auth` `OrgService.AcceptInvite` (`token`) |
+| `POST` | `/api/v1/session/org` | Proxies to `orbit-auth` `OrgService.SelectOrg` (`org_id`, `refresh_token`); returns a token pair |
 | `POST` | `/api/v1/system/ownership/challenge` | In-memory 6-digit OTP (10m TTL). **Does not send email.** Alias: `/api/v1/admin/challenge` |
 | `POST` | `/api/v1/system/ownership/verify` | Verify in-memory code; fingerprint is not a signing secret. Alias: `/api/v1/admin/verify` |
 | `POST` | `/api/v1/dev/onboard/claim` | Workstation onboarding claim (aliases: `/api/v1/onboard/claim`, `/v1/onboard/claim`; supports `Idempotency-Key` header) |
@@ -45,10 +55,11 @@ Default HTTP API: `localhost:10120` (`HTTP_PORT`) · Health: `localhost:10121` (
 
 ```
 cmd/gateway/                        wiring only: env, adapters, servers
-internal/domain/                    edge types and ports (AuthService, Limiter, Clock,
-                                    CodeGenerator, ChallengeStore, ClaimCache, Assets)
-internal/application/               auth, ownership, onboarding, asset and rate-limit
-                                    use cases
+internal/domain/                    edge types and ports (AuthService, OrgService,
+                                    SignupService, Limiter, Clock, CodeGenerator,
+                                    ChallengeStore, ClaimCache, Assets)
+internal/application/               auth, signup, organization, ownership, onboarding,
+                                    asset and rate-limit use cases
 internal/infrastructure/
   assets/                           embedded installer, OpenAPI artifacts
   auth/                             orbit-auth gRPC adapter and status mapping

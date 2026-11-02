@@ -8,6 +8,8 @@ import "github.com/manovaspace/orbit-api-gateway/internal/domain"
 // Deps are the service's ports and runtime collaborators.
 type Deps struct {
 	Auth       domain.AuthService
+	Orgs       domain.OrgService
+	Signup     domain.SignupService
 	Limiter    domain.Limiter
 	Clock      domain.Clock
 	Codes      domain.CodeGenerator
@@ -17,9 +19,12 @@ type Deps struct {
 	Logger     func(msg string, args ...any)
 }
 
-// Service orchestrates the auth, ownership and onboarding use cases.
+// Service orchestrates the auth, signup, organization, ownership and
+// onboarding use cases.
 type Service struct {
 	auth       domain.AuthService
+	orgs       domain.OrgService
+	signup     domain.SignupService
 	limiter    domain.Limiter
 	clock      domain.Clock
 	codes      domain.CodeGenerator
@@ -37,6 +42,8 @@ func NewService(deps Deps) *Service {
 	}
 	return &Service{
 		auth:       deps.Auth,
+		orgs:       deps.Orgs,
+		signup:     deps.Signup,
 		limiter:    deps.Limiter,
 		clock:      deps.Clock,
 		codes:      deps.Codes,
@@ -50,6 +57,12 @@ func NewService(deps Deps) *Service {
 // HasAuth reports whether the upstream auth port is wired. Without it the edge
 // does not register the auth routes, exactly as before.
 func (s *Service) HasAuth() bool { return s.auth != nil }
+
+// HasOrgs reports whether the upstream organization port is wired.
+func (s *Service) HasOrgs() bool { return s.orgs != nil }
+
+// HasSignup reports whether the upstream sign-up port is wired.
+func (s *Service) HasSignup() bool { return s.signup != nil }
 
 // HasLimiter reports whether rate limiting is wired. Without it no route is
 // wrapped and no rate-limit header is written.

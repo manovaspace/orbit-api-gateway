@@ -60,6 +60,8 @@ func main() {
 
 	svc := application.NewService(application.Deps{
 		Auth:       authClient,
+		Orgs:       authClient,
+		Signup:     authClient,
 		Limiter:    limiter,
 		Clock:      clock.New(),
 		Codes:      ids.New(),

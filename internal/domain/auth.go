@@ -21,6 +21,13 @@ const (
 	KindPermissionDenied
 	KindFailedPrecondition
 	KindResourceExhausted
+	// KindNotFound is a missing resource, including an organization the caller
+	// is not an active member of.
+	KindNotFound
+	// KindConflict is a state conflict, such as removing the last owner.
+	KindConflict
+	// KindBadGateway is an upstream failure with no client-safe detail.
+	KindBadGateway
 )
 
 // Error is a client-facing failure. Message is the exact text the edge returns.

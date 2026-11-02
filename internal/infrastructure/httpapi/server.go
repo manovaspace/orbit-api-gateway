@@ -55,6 +55,27 @@ func New(svc *application.Service, opts Options) *Server {
 		mux.HandleFunc("POST /api/v1/auth/token/refresh", wrap(domain.ClassAuthRefresh, h.refreshToken))
 	}
 
+	// Self-serve sign-up (unauthenticated, strict per-IP budget).
+	if svc.HasSignup() {
+		mux.HandleFunc("POST /api/v1/auth/signup", h.wrapIP(routeSignup, domain.SignupIPLimit, h.signup))
+		mux.HandleFunc("POST /api/v1/auth/signup/verify", h.wrapIP(routeSignupVerify, domain.SignupIPLimit, h.signupVerify))
+	}
+
+	// Organizations and invitations. Every call carries the caller's bearer
+	// token to orbit-auth; organization-scoped routes use a per-org budget.
+	if svc.HasOrgs() {
+		// Listing and creating have no organization id to bucket on yet, so
+		// they use the per-IP key with the organization budget.
+		mux.HandleFunc("GET /api/v1/orgs", h.wrapIP(routeOrgList, domain.OrgRouteLimit, h.listOrgs))
+		mux.HandleFunc("POST /api/v1/orgs", h.wrapIP(routeOrgCreate, domain.OrgRouteLimit, h.createOrg))
+		mux.HandleFunc("GET /api/v1/orgs/{org_id}/members", h.wrapOrg(routeOrgMembers, h.listMembers))
+		mux.HandleFunc("POST /api/v1/orgs/{org_id}/invites", h.wrapOrg(routeOrgInvites, h.createInvite))
+		mux.HandleFunc("GET /api/v1/orgs/{org_id}/invites", h.wrapOrg(routeOrgInvites, h.listInvites))
+		mux.HandleFunc("DELETE /api/v1/orgs/{org_id}/invites/{invite_id}", h.wrapOrg(routeOrgInviteRev, h.revokeInvite))
+		mux.HandleFunc("POST /api/v1/invites/accept", h.wrapIP(routeInviteAccept, domain.InviteAcceptIPLimit, h.acceptInvite))
+		mux.HandleFunc("POST /api/v1/session/org", h.selectOrg)
+	}
+
 	// Canonical System & Infrastructure Plane (Platform Ownership).
 	mux.HandleFunc("POST /api/v1/system/ownership/challenge", wrap(domain.ClassOwnershipChallenge, h.challenge))
 	mux.HandleFunc("POST /api/v1/system/ownership/verify", wrap(domain.ClassOwnershipVerify, h.verifyChallenge))

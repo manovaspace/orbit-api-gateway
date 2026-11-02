@@ -74,6 +74,8 @@ func newContractEnvWith(t *testing.T, cfg contractConfig, withJWKS bool) *contra
 
 	svc := application.NewService(application.Deps{
 		Auth:       client,
+		Orgs:       client,
+		Signup:     client,
 		Limiter:    limiter,
 		Clock:      fixedClock{},
 		Codes:      fixedCodes{},
@@ -196,6 +198,8 @@ func (failingLimiter) Allow(context.Context, string, domain.Policy) (domain.Deci
 // the response, so contract cases stay independent and order-free.
 type contractUpstream struct {
 	authv1.UnimplementedAuthServiceServer
+	authv1.UnimplementedOrgServiceServer
+	authv1.UnimplementedSignupServiceServer
 }
 
 func (contractUpstream) RequestOTP(_ context.Context, in *authv1.RequestOTPRequest) (*authv1.RequestOTPResponse, error) {
@@ -248,6 +252,58 @@ func (contractUpstream) ValidateApiToken(_ context.Context, in *authv1.ValidateA
 	return &authv1.ValidateApiTokenResponse{UserId: "user-1", Scopes: []string{"read", "write"}}, nil
 }
 
+func (contractUpstream) CreateOrg(_ context.Context, in *authv1.CreateOrgRequest) (*authv1.CreateOrgResponse, error) {
+	return &authv1.CreateOrgResponse{Organization: &authv1.Organization{Id: "org-1", Name: in.GetName()}}, nil
+}
+
+func (contractUpstream) ListMyOrgs(context.Context, *authv1.ListMyOrgsRequest) (*authv1.ListMyOrgsResponse, error) {
+	return &authv1.ListMyOrgsResponse{Organizations: []*authv1.Organization{{Id: "org-1", Name: "Acme"}}}, nil
+}
+
+func (contractUpstream) ListMembers(_ context.Context, in *authv1.ListMembersRequest) (*authv1.ListMembersResponse, error) {
+	return &authv1.ListMembersResponse{Members: []*authv1.Membership{{
+		OrgId: in.GetOrgId(), UserId: "user-1", Status: "active",
+	}}}, nil
+}
+
+func (contractUpstream) InviteMember(_ context.Context, in *authv1.InviteMemberRequest) (*authv1.InviteMemberResponse, error) {
+	return &authv1.InviteMemberResponse{Invite: &authv1.Invite{
+		Id: "invite-1", OrgId: in.GetOrgId(), Email: in.GetEmail(), Status: "pending",
+	}}, nil
+}
+
+func (contractUpstream) AcceptInvite(context.Context, *authv1.AcceptInviteRequest) (*authv1.AcceptInviteResponse, error) {
+	return &authv1.AcceptInviteResponse{Invite: &authv1.Invite{Id: "invite-1", Status: "accepted"}}, nil
+}
+
+func (contractUpstream) RevokeInvite(context.Context, *authv1.RevokeInviteRequest) (*authv1.RevokeInviteResponse, error) {
+	return &authv1.RevokeInviteResponse{}, nil
+}
+
+func (contractUpstream) ListInvites(_ context.Context, in *authv1.ListInvitesRequest) (*authv1.ListInvitesResponse, error) {
+	return &authv1.ListInvitesResponse{Invites: []*authv1.Invite{{Id: "invite-1", OrgId: in.GetOrgId()}}}, nil
+}
+
+func (contractUpstream) SelectOrg(_ context.Context, in *authv1.SelectOrgRequest) (*authv1.SelectOrgResponse, error) {
+	return &authv1.SelectOrgResponse{Tokens: &authv1.TokenResponse{
+		AccessToken:  "access-" + in.GetOrgId(),
+		RefreshToken: "refresh",
+		ExpiresAt:    "2026-11-02T11:00:00Z",
+	}}, nil
+}
+
+func (contractUpstream) RegisterWithEmail(context.Context, *authv1.RegisterWithEmailRequest) (*authv1.RegisterWithEmailResponse, error) {
+	return &authv1.RegisterWithEmailResponse{}, nil
+}
+
+func (contractUpstream) VerifySignup(context.Context, *authv1.VerifySignupRequest) (*authv1.VerifySignupResponse, error) {
+	return &authv1.VerifySignupResponse{Tokens: &authv1.TokenResponse{
+		AccessToken:  "access-signup",
+		RefreshToken: "refresh-signup",
+		ExpiresAt:    "2026-11-02T11:00:00Z",
+	}}, nil
+}
+
 func startContractUpstream(t *testing.T) string {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -256,6 +312,8 @@ func startContractUpstream(t *testing.T) string {
 	}
 	gs := grpc.NewServer()
 	authv1.RegisterAuthServiceServer(gs, contractUpstream{})
+	authv1.RegisterOrgServiceServer(gs, contractUpstream{})
+	authv1.RegisterSignupServiceServer(gs, contractUpstream{})
 	go func() { _ = gs.Serve(listener) }()
 	t.Cleanup(gs.Stop)
 	return listener.Addr().String()
