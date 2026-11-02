@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -9,6 +10,8 @@ import (
 	"testing"
 
 	orbittoken "github.com/manovaspace/orbit-auth/token"
+
+	"github.com/manovaspace/orbit-api-gateway/internal/domain"
 )
 
 // This file is the HTTP contract of orbit-api-gateway, captured from the
@@ -707,11 +710,25 @@ const (
 	specDigest      = "cf2880764c3ef7291872fba7d7e1e2aba1de2b165f383d41e8fc22ba68db0ba3"
 	manifestDigest  = "52d4ee360e6f9693c042a1f2e95b0155b8e68f51178d43cd3726a595cd2517a6"
 
-	claimBody        = `{"status":"provisioned","idempotent_replay":false,"user":{"uid":"john","email":"john@example.com","display_name":"John Doe","groups":["dev","orbit"]},"credentials":{"forgejo_username":"john","forgejo_mcp_token":"mcp_f3bc3d3c17133acba84bdcefa610add1","wireguard_config":"[Interface]\nPrivateKey = \u003cgenerated-client-key\u003e\nAddress = 10.42.0.53/32\nDNS = 10.42.0.1\n\n[Peer]\nPublicKey = 4gZ+examplePublicKeyOrbitGatewayVPNControllerKey=\nEndpoint = vpn.internal.manova.space:51820\nAllowedIPs = 10.42.0.0/16, 172.28.0.0/16\nPersistentKeepalive = 25"},"workspace":{"git_remote_base":"ssh://git@git.internal.manova.space:2222/manova","default_manifest_scope":"core"}}` + "\n"
-	claimReplayBody  = `{"status":"provisioned","idempotent_replay":true,"user":{"uid":"john","email":"john@example.com","display_name":"John Doe","groups":["dev","orbit"]},"credentials":{"forgejo_username":"john","forgejo_mcp_token":"mcp_f3bc3d3c17133acba84bdcefa610add1","wireguard_config":"[Interface]\nPrivateKey = \u003cgenerated-client-key\u003e\nAddress = 10.42.0.53/32\nDNS = 10.42.0.1\n\n[Peer]\nPublicKey = 4gZ+examplePublicKeyOrbitGatewayVPNControllerKey=\nEndpoint = vpn.internal.manova.space:51820\nAllowedIPs = 10.42.0.0/16, 172.28.0.0/16\nPersistentKeepalive = 25"},"workspace":{"git_remote_base":"ssh://git@git.internal.manova.space:2222/manova","default_manifest_scope":"core"}}` + "\n"
-	claimDefaultBody = `{"status":"provisioned","idempotent_replay":false,"user":{"uid":"jane","email":"jane@manova.space","display_name":"Jane","groups":["dev","orbit"]},"credentials":{"forgejo_username":"jane","forgejo_mcp_token":"mcp_982fc87fd1b877acf555ad9ad608eda3","wireguard_config":"[Interface]\nPrivateKey = \u003cgenerated-client-key\u003e\nAddress = 10.42.0.162/32\nDNS = 10.42.0.1\n\n[Peer]\nPublicKey = 4gZ+examplePublicKeyOrbitGatewayVPNControllerKey=\nEndpoint = vpn.internal.manova.space:51820\nAllowedIPs = 10.42.0.0/16, 172.28.0.0/16\nPersistentKeepalive = 25"},"workspace":{"git_remote_base":"ssh://git@git.internal.manova.space:2222/manova","default_manifest_scope":"core"}}` + "\n"
-	claimAliasBody   = `{"status":"provisioned","idempotent_replay":false,"user":{"uid":"bob","email":"bob@manova.space","display_name":"Bob","groups":["dev","orbit"]},"credentials":{"forgejo_username":"bob","forgejo_mcp_token":"mcp_940b7793468eb9f7a1fcf67301af5e09","wireguard_config":"[Interface]\nPrivateKey = \u003cgenerated-client-key\u003e\nAddress = 10.42.0.158/32\nDNS = 10.42.0.1\n\n[Peer]\nPublicKey = 4gZ+examplePublicKeyOrbitGatewayVPNControllerKey=\nEndpoint = vpn.internal.manova.space:51820\nAllowedIPs = 10.42.0.0/16, 172.28.0.0/16\nPersistentKeepalive = 25"},"workspace":{"git_remote_base":"ssh://git@git.internal.manova.space:2222/manova","default_manifest_scope":"core"}}` + "\n"
+	claimBodyFixture        = `{"status":"provisioned","idempotent_replay":false,"user":{"uid":"john","email":"john@example.com","display_name":"John Doe","groups":["dev","orbit"]},"credentials":{"forgejo_username":"john","forgejo_mcp_token":"%s","wireguard_config":"[Interface]\nPrivateKey = \u003cgenerated-client-key\u003e\nAddress = 10.42.0.53/32\nDNS = 10.42.0.1\n\n[Peer]\nPublicKey = 4gZ+examplePublicKeyOrbitGatewayVPNControllerKey=\nEndpoint = vpn.internal.manova.space:51820\nAllowedIPs = 10.42.0.0/16, 172.28.0.0/16\nPersistentKeepalive = 25"},"workspace":{"git_remote_base":"ssh://git@git.internal.manova.space:2222/manova","default_manifest_scope":"core"}}` + "\n"
+	claimReplayBodyFixture  = `{"status":"provisioned","idempotent_replay":true,"user":{"uid":"john","email":"john@example.com","display_name":"John Doe","groups":["dev","orbit"]},"credentials":{"forgejo_username":"john","forgejo_mcp_token":"%s","wireguard_config":"[Interface]\nPrivateKey = \u003cgenerated-client-key\u003e\nAddress = 10.42.0.53/32\nDNS = 10.42.0.1\n\n[Peer]\nPublicKey = 4gZ+examplePublicKeyOrbitGatewayVPNControllerKey=\nEndpoint = vpn.internal.manova.space:51820\nAllowedIPs = 10.42.0.0/16, 172.28.0.0/16\nPersistentKeepalive = 25"},"workspace":{"git_remote_base":"ssh://git@git.internal.manova.space:2222/manova","default_manifest_scope":"core"}}` + "\n"
+	claimDefaultBodyFixture = `{"status":"provisioned","idempotent_replay":false,"user":{"uid":"jane","email":"jane@manova.space","display_name":"Jane","groups":["dev","orbit"]},"credentials":{"forgejo_username":"jane","forgejo_mcp_token":"%s","wireguard_config":"[Interface]\nPrivateKey = \u003cgenerated-client-key\u003e\nAddress = 10.42.0.162/32\nDNS = 10.42.0.1\n\n[Peer]\nPublicKey = 4gZ+examplePublicKeyOrbitGatewayVPNControllerKey=\nEndpoint = vpn.internal.manova.space:51820\nAllowedIPs = 10.42.0.0/16, 172.28.0.0/16\nPersistentKeepalive = 25"},"workspace":{"git_remote_base":"ssh://git@git.internal.manova.space:2222/manova","default_manifest_scope":"core"}}` + "\n"
+	claimAliasBodyFixture   = `{"status":"provisioned","idempotent_replay":false,"user":{"uid":"bob","email":"bob@manova.space","display_name":"Bob","groups":["dev","orbit"]},"credentials":{"forgejo_username":"bob","forgejo_mcp_token":"%s","wireguard_config":"[Interface]\nPrivateKey = \u003cgenerated-client-key\u003e\nAddress = 10.42.0.158/32\nDNS = 10.42.0.1\n\n[Peer]\nPublicKey = 4gZ+examplePublicKeyOrbitGatewayVPNControllerKey=\nEndpoint = vpn.internal.manova.space:51820\nAllowedIPs = 10.42.0.0/16, 172.28.0.0/16\nPersistentKeepalive = 25"},"workspace":{"git_remote_base":"ssh://git@git.internal.manova.space:2222/manova","default_manifest_scope":"core"}}` + "\n"
 )
+
+// claimBody and friends are the captured claim responses with the MCP token
+// the domain derives for each claim, interpolated at runtime so the fixtures
+// never carry a token-shaped literal.
+var (
+	claimBody        = claimBodyWithToken(claimBodyFixture, "tok-1", "john")
+	claimReplayBody  = claimBodyWithToken(claimReplayBodyFixture, "tok-1", "john")
+	claimDefaultBody = claimBodyWithToken(claimDefaultBodyFixture, "tok-2", "jane")
+	claimAliasBody   = claimBodyWithToken(claimAliasBodyFixture, "tok-3", "bob")
+)
+
+func claimBodyWithToken(fixture, inviteToken, uid string) string {
+	return fmt.Sprintf(fixture, domain.ClaimCredentialsFor(inviteToken, uid).ForgejoMCPToken)
+}
 
 // repoRoot walks up from the package directory to the module root.
 func repoRoot(t *testing.T) string {
