@@ -1,6 +1,6 @@
 # Standalone image build (GitHub/GHCR). Local monorepo replace dirs are stripped;
 # public manovaspace modules are fetched from the module proxy (@main until semver tags).
-FROM golang:1.26-alpine AS builder
+FROM golang:1.27.3-alpine AS builder
 RUN apk add --no-cache git ca-certificates
 ENV GOPROXY=https://proxy.golang.org,direct
 ENV GONOSUMDB=github.com/manovaspace/*
@@ -18,7 +18,7 @@ RUN set -euo pipefail \
 	&& go mod tidy \
 	&& CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /gateway ./cmd/gateway
 
-FROM alpine:3.21
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=builder /gateway /app/gateway
