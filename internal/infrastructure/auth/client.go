@@ -10,16 +10,26 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/manovaspace/orbit-api-gateway/internal/domain"
 )
 
-// Client implements domain.AuthService over gRPC.
+// Client implements domain.AuthService, domain.OrgService and
+// domain.SignupService over gRPC.
 type Client struct {
-	api  authv1.AuthServiceClient
-	conn *grpc.ClientConn
+	api    authv1.AuthServiceClient
+	orgs   authv1.OrgServiceClient
+	signup authv1.SignupServiceClient
+	conn   *grpc.ClientConn
 }
+
+var (
+	_ domain.AuthService   = (*Client)(nil)
+	_ domain.OrgService    = (*Client)(nil)
+	_ domain.SignupService = (*Client)(nil)
+)
 
 // NewClient dials the upstream auth service. The caller closes the client.
 func NewClient(addr string, opts ...grpc.DialOption) (*Client, error) {
@@ -29,7 +39,12 @@ func NewClient(addr string, opts ...grpc.DialOption) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{api: authv1.NewAuthServiceClient(conn), conn: conn}, nil
+	return &Client{
+		api:    authv1.NewAuthServiceClient(conn),
+		orgs:   authv1.NewOrgServiceClient(conn),
+		signup: authv1.NewSignupServiceClient(conn),
+		conn:   conn,
+	}, nil
 }
 
 // RequestOTP asks orbit-auth to send a one-time password.
@@ -90,6 +105,124 @@ func (c *Client) ValidateAPIToken(ctx context.Context, secret string) (domain.AP
 	return domain.APIIdentity{UserID: resp.GetUserId(), Scopes: resp.GetScopes()}, nil
 }
 
+// RegisterWithEmail starts a self-serve registration. The upstream answers an
+// empty message for both a new and an existing address.
+func (c *Client) RegisterWithEmail(ctx context.Context, in domain.SignupRegistration) error {
+	_, err := c.signup.RegisterWithEmail(ctx, &authv1.RegisterWithEmailRequest{
+		Email:       in.Email,
+		Password:    in.Password,
+		DisplayName: in.DisplayName,
+		Locale:      in.Locale,
+		OrgName:     in.OrgName,
+		InviteToken: in.InviteToken,
+	})
+	if err != nil {
+		return signupUpstreamError(err)
+	}
+	return nil
+}
+
+// VerifySignup exchanges a sign-up OTP and pending password for a token pair.
+func (c *Client) VerifySignup(ctx context.Context, in domain.SignupVerification) (domain.TokenPair, error) {
+	resp, err := c.signup.VerifySignup(ctx, &authv1.VerifySignupRequest{
+		Email:    in.Email,
+		Code:     in.Code,
+		Password: in.Password,
+	})
+	if err != nil {
+		return domain.TokenPair{}, signupUpstreamError(err)
+	}
+	return tokenPair(resp.GetTokens()), nil
+}
+
+// CreateOrg creates an organization owned by the caller.
+func (c *Client) CreateOrg(ctx context.Context, name, accessToken string) (domain.Organization, error) {
+	resp, err := c.orgs.CreateOrg(callerContext(ctx, accessToken), &authv1.CreateOrgRequest{Name: name})
+	if err != nil {
+		return domain.Organization{}, orgUpstreamError(err)
+	}
+	return organization(resp.GetOrganization()), nil
+}
+
+// ListMyOrgs lists the organizations the caller belongs to.
+func (c *Client) ListMyOrgs(ctx context.Context, accessToken string) ([]domain.Organization, error) {
+	resp, err := c.orgs.ListMyOrgs(callerContext(ctx, accessToken), &authv1.ListMyOrgsRequest{})
+	if err != nil {
+		return nil, orgUpstreamError(err)
+	}
+	return organizations(resp.GetOrganizations()), nil
+}
+
+// ListMembers lists an organization's members.
+func (c *Client) ListMembers(ctx context.Context, orgID, accessToken string) ([]domain.Membership, error) {
+	resp, err := c.orgs.ListMembers(callerContext(ctx, accessToken), &authv1.ListMembersRequest{OrgId: orgID})
+	if err != nil {
+		return nil, orgUpstreamError(err)
+	}
+	return memberships(resp.GetMembers()), nil
+}
+
+// InviteMember creates or rotates an organization invitation.
+func (c *Client) InviteMember(ctx context.Context, orgID, email, accessToken string) (domain.Invite, error) {
+	resp, err := c.orgs.InviteMember(callerContext(ctx, accessToken), &authv1.InviteMemberRequest{
+		OrgId: orgID,
+		Email: email,
+	})
+	if err != nil {
+		return domain.Invite{}, orgUpstreamError(err)
+	}
+	return invite(resp.GetInvite()), nil
+}
+
+// AcceptInvite consumes an invitation token for the authenticated caller.
+func (c *Client) AcceptInvite(ctx context.Context, token, accessToken string) (domain.Invite, error) {
+	resp, err := c.orgs.AcceptInvite(callerContext(ctx, accessToken), &authv1.AcceptInviteRequest{Token: token})
+	if err != nil {
+		return domain.Invite{}, orgUpstreamError(err)
+	}
+	return invite(resp.GetInvite()), nil
+}
+
+// RevokeInvite revokes a pending invitation.
+func (c *Client) RevokeInvite(ctx context.Context, orgID, inviteID, accessToken string) error {
+	_, err := c.orgs.RevokeInvite(callerContext(ctx, accessToken), &authv1.RevokeInviteRequest{
+		OrgId:    orgID,
+		InviteId: inviteID,
+	})
+	if err != nil {
+		return orgUpstreamError(err)
+	}
+	return nil
+}
+
+// ListInvites lists an organization's invitations.
+func (c *Client) ListInvites(ctx context.Context, orgID, accessToken string) ([]domain.Invite, error) {
+	resp, err := c.orgs.ListInvites(callerContext(ctx, accessToken), &authv1.ListInvitesRequest{OrgId: orgID})
+	if err != nil {
+		return nil, orgUpstreamError(err)
+	}
+	return invites(resp.GetInvites()), nil
+}
+
+// SelectOrg rotates the caller's refresh token and issues a pair carrying the
+// selected organization.
+func (c *Client) SelectOrg(ctx context.Context, orgID, refreshToken, accessToken string) (domain.TokenPair, error) {
+	resp, err := c.orgs.SelectOrg(callerContext(ctx, accessToken), &authv1.SelectOrgRequest{
+		OrgId:        orgID,
+		RefreshToken: refreshToken,
+	})
+	if err != nil {
+		return domain.TokenPair{}, orgUpstreamError(err)
+	}
+	return tokenPair(resp.GetTokens()), nil
+}
+
+// callerContext attaches the bearer access token the way orbit-auth's OrgService
+// interceptor reads it: the first "authorization" metadata value.
+func callerContext(ctx context.Context, accessToken string) context.Context {
+	return metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+accessToken)
+}
+
 // Close closes the upstream connection.
 func (c *Client) Close() error {
 	if c.conn == nil {
@@ -104,6 +237,58 @@ func tokenPair(tokens *authv1.TokenResponse) domain.TokenPair {
 		RefreshToken: tokens.GetRefreshToken(),
 		ExpiresAt:    tokens.GetExpiresAt(),
 	}
+}
+
+func organization(org *authv1.Organization) domain.Organization {
+	return domain.Organization{
+		ID:        org.GetId(),
+		Name:      org.GetName(),
+		CreatedAt: org.GetCreatedAt(),
+		UpdatedAt: org.GetUpdatedAt(),
+	}
+}
+
+func organizations(orgs []*authv1.Organization) []domain.Organization {
+	out := make([]domain.Organization, 0, len(orgs))
+	for _, org := range orgs {
+		out = append(out, organization(org))
+	}
+	return out
+}
+
+func memberships(members []*authv1.Membership) []domain.Membership {
+	out := make([]domain.Membership, 0, len(members))
+	for _, member := range members {
+		out = append(out, domain.Membership{
+			OrgID:     member.GetOrgId(),
+			UserID:    member.GetUserId(),
+			Status:    member.GetStatus(),
+			CreatedAt: member.GetCreatedAt(),
+			UpdatedAt: member.GetUpdatedAt(),
+		})
+	}
+	return out
+}
+
+func invite(in *authv1.Invite) domain.Invite {
+	return domain.Invite{
+		ID:         in.GetId(),
+		OrgID:      in.GetOrgId(),
+		Email:      in.GetEmail(),
+		InviterID:  in.GetInviterId(),
+		Status:     in.GetStatus(),
+		ExpiresAt:  in.GetExpiresAt(),
+		AcceptedAt: in.GetAcceptedAt(),
+		CreatedAt:  in.GetCreatedAt(),
+	}
+}
+
+func invites(items []*authv1.Invite) []domain.Invite {
+	out := make([]domain.Invite, 0, len(items))
+	for _, item := range items {
+		out = append(out, invite(item))
+	}
+	return out
 }
 
 // upstreamError maps a gRPC failure to the domain kind the edge renders. Every
@@ -126,4 +311,35 @@ func upstreamError(err error) error {
 		}
 	}
 	return domain.NewError(domain.KindInternal, "upstream error")
+}
+
+// orgUpstreamError is the mapping for organization and invitation calls. It
+// keeps NotFound (including a non-member organization) distinct from an
+// upstream failure, and turns a failed precondition into a conflict so the edge
+// answers 409.
+func orgUpstreamError(err error) error {
+	if st, ok := status.FromError(err); ok {
+		switch st.Code() {
+		case codes.InvalidArgument:
+			return domain.NewError(domain.KindInvalidArgument, st.Message())
+		case codes.Unauthenticated:
+			return domain.NewError(domain.KindUnauthenticated, st.Message())
+		case codes.NotFound:
+			return domain.NewError(domain.KindNotFound, st.Message())
+		case codes.FailedPrecondition:
+			return domain.NewError(domain.KindConflict, st.Message())
+		case codes.ResourceExhausted:
+			return domain.NewError(domain.KindResourceExhausted, st.Message())
+		}
+	}
+	return domain.NewError(domain.KindBadGateway, "upstream error")
+}
+
+// signupUpstreamError hides a disabled sign-up surface behind a 404, exactly as
+// if the route did not exist. Every other failure follows orgUpstreamError.
+func signupUpstreamError(err error) error {
+	if st, ok := status.FromError(err); ok && st.Code() == codes.FailedPrecondition {
+		return domain.NewError(domain.KindNotFound, "not found")
+	}
+	return orgUpstreamError(err)
 }

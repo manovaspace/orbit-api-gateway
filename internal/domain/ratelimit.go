@@ -28,6 +28,15 @@ const (
 	authClassRefreshLimit    = 30
 	otpIdentifierWindowLimit = 3
 	defaultAuthPolicyWindow  = time.Minute
+	// SignupIPLimit is the strict per-IP budget for signup and signup
+	// verification. InviteAcceptIPLimit is the same budget for accepting an
+	// invitation.
+	SignupIPLimit       = 5
+	InviteAcceptIPLimit = 5
+	// OrgRouteLimit is the per-organization budget for organization-scoped
+	// routes.
+	OrgRouteLimit = 60
+	RouteWindow   = time.Minute
 )
 
 // Policy describes one token-bucket class.
@@ -80,6 +89,18 @@ func DefaultAuthPolicies() map[string]Policy {
 // OTPRequestIdentifierPolicy is the per-identifier OTP request limit.
 func OTPRequestIdentifierPolicy() Policy {
 	return Policy{Class: ClassAuthOTPRequest, Limit: otpIdentifierWindowLimit, Window: defaultAuthPolicyWindow}
+}
+
+// IPRoutePolicy is the per-IP budget for a public route. The route template is
+// the class and the rate-limit key's route name.
+func IPRoutePolicy(route string, limit int) Policy {
+	return Policy{Class: route, Limit: limit, Window: RouteWindow}
+}
+
+// OrgRoutePolicy is the per-organization budget for an organization route. The
+// route template is the class and the rate-limit key's route name.
+func OrgRoutePolicy(route string) Policy {
+	return Policy{Class: route, Limit: OrgRouteLimit, Window: RouteWindow}
 }
 
 // PolicyFor returns the class policy. A class without a policy gets the zero

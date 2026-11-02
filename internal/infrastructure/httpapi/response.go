@@ -51,6 +51,12 @@ func writeAppError(w http.ResponseWriter, err error) {
 			status = http.StatusPreconditionFailed
 		case domain.KindResourceExhausted:
 			status = http.StatusTooManyRequests
+		case domain.KindNotFound:
+			status = http.StatusNotFound
+		case domain.KindConflict:
+			status = http.StatusConflict
+		case domain.KindBadGateway:
+			status = http.StatusBadGateway
 		}
 	}
 	writeJSON(w, status, map[string]string{"error": message})

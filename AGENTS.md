@@ -14,8 +14,8 @@ Status: `beta`.
 
 ## Architecture
 
-- `internal/domain` — the edge's types and ports: `AuthService` (upstream orbit-auth), `Limiter`, `Clock`, `CodeGenerator`, `ChallengeStore`, `ClaimCache`, `Assets`. It imports no infrastructure package, HTTP framework, environment or proto.
-- `internal/application` — the auth, ownership, onboarding, static-asset and rate-limit use cases. It receives `application.Deps` and reads no environment variable.
+- `internal/domain` — the edge's types and ports: `AuthService`, `OrgService`, `SignupService` (upstream orbit-auth), `Limiter`, `Clock`, `CodeGenerator`, `ChallengeStore`, `ClaimCache`, `Assets`. It imports no infrastructure package, HTTP framework, environment or proto.
+- `internal/application` — the auth, signup, organization, ownership, onboarding, static-asset and rate-limit use cases. It receives `application.Deps` and reads no environment variable.
 - `internal/infrastructure` — adapters: `httpapi` (Fiber v3 edge and health server), `auth` (orbit-auth gRPC), `ratelimit` (orbit-rate-limiting memory/Redis), `memory` (challenge and claim stores), `assets` (embedded installer, OpenAPI artifacts), `jwks`, `clock`, `ids`.
 - `cmd/gateway` — wiring only.
 - `.golangci.yml` `depguard` rules enforce both boundaries. Do not weaken them to land a change.
@@ -33,7 +33,7 @@ Three paths are deliberately absent: no Postgres (so no migrations, no sqlc and 
 
 Public HTTP is **OpenAPI-first**. Commit the OpenAPI artifact under `openapi/`; serve it at `/api/v1/openapi/gateway.yaml`. Scalar handbook/infra embedding is **planned** — do not hand-maintain endpoint tables.
 
-The spec includes stable `operationId` values (`authLogin`, `authOtpRequest`, `authOtpVerify`, `authTokenRefresh`) and shared schemas (`TokenPair`, `OtpRequestResponse`, `ErrorEnvelope`). **Do not rename operationIds** without coordinating `@orbit/contracts` codegen in orbit-frontend (vendor + regenerate).
+The spec includes stable `operationId` values for every operation (`authLogin`, `authOtpRequest`, `authOtpVerify`, `authTokenRefresh`, `authSignup`, `authSignupVerify`, `orgList`, `orgCreate`, `orgMembersList`, `orgInviteCreate`, `orgInviteList`, `orgInviteRevoke`, `inviteAccept`, `sessionSelectOrg`) and shared schemas (`TokenPair`, `OtpRequestResponse`, `ErrorEnvelope`). **Do not rename operationIds** without coordinating `@orbit/contracts` codegen in orbit-frontend (vendor + regenerate).
 
 `internal/infrastructure/httpapi/openapi_test.go` parses the YAML and asserts path/method/`operationId` parity with `platformOpenAPIRoutes` (keep that table aligned with `New` auth registrations).
 
@@ -53,6 +53,16 @@ Agent routing: `openapi` / `orbit-api-gateway` in `handbook/cursor/agent-routing
 | `POST` | `/api/v1/auth/otp/verify` | Upstream `orbit-auth` VerifyOTP |
 | `POST` | `/api/v1/auth/login` | Upstream `orbit-auth` LoginWithPassword (`identifier`: email or E.164 mobile) |
 | `POST` | `/api/v1/auth/token/refresh` | Upstream `orbit-auth` RefreshToken |
+| `POST` | `/api/v1/auth/signup` | Upstream `orbit-auth` SignupService RegisterWithEmail. Unauthenticated; same 202 for new and existing addresses; disabled sign-up answers 404 |
+| `POST` | `/api/v1/auth/signup/verify` | Upstream `orbit-auth` SignupService VerifySignup; returns `TokenPair` |
+| `GET` | `/api/v1/orgs` | Upstream `orbit-auth` OrgService ListMyOrgs (bearer access token) |
+| `POST` | `/api/v1/orgs` | Upstream `orbit-auth` OrgService CreateOrg (`name`; bearer access token) |
+| `GET` | `/api/v1/orgs/{org_id}/members` | Upstream `orbit-auth` OrgService ListMembers (bearer; non-member is 404) |
+| `POST` | `/api/v1/orgs/{org_id}/invites` | Upstream `orbit-auth` OrgService InviteMember (`email`) |
+| `GET` | `/api/v1/orgs/{org_id}/invites` | Upstream `orbit-auth` OrgService ListInvites |
+| `DELETE` | `/api/v1/orgs/{org_id}/invites/{invite_id}` | Upstream `orbit-auth` OrgService RevokeInvite |
+| `POST` | `/api/v1/invites/accept` | Upstream `orbit-auth` OrgService AcceptInvite (`token`) |
+| `POST` | `/api/v1/session/org` | Upstream `orbit-auth` OrgService SelectOrg (`org_id`, `refresh_token`); returns `TokenPair` |
 | `POST` | `/api/v1/system/ownership/challenge` | In-memory 6-digit OTP (10m TTL). **Does not send email.** Alias: `/api/v1/admin/challenge` |
 | `POST` | `/api/v1/system/ownership/verify` | Verify in-memory code; fingerprint is not a signing secret. Alias: `/api/v1/admin/verify` |
 | `POST` | `/api/v1/dev/onboard/claim` | Workstation onboarding claim (aliases: `/api/v1/onboard/claim`, `/v1/onboard/claim`; supports `Idempotency-Key` header) |

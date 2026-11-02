@@ -2,6 +2,13 @@ openapi: 3.1.0
 info:
   title: Orbit API Gateway
   version: 0.1.0
+  description: |
+    REST edge for Orbit Auth, organizations and invitations.
+
+    Direct member add, remove and suspend are intentionally not exposed. Orbit
+    Auth gates those calls on the caller being a member only, so a gateway
+    route would let any member remove the organization owner. They wait for a
+    product-level admin check.
 servers:
   - url: /
 security:
@@ -427,6 +434,546 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/auth/signup:
+    post:
+      operationId: authSignup
+      summary: Start self-serve sign-up with email
+      description: >
+        Creates a pending account and sends a sign-up verification code. The
+        response is identical for a new and an existing address, so the route
+        cannot be used to enumerate accounts. When sign-up is disabled the edge
+        answers 404 as if the route did not exist.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                  writeOnly: true
+                display_name:
+                  type: string
+                locale:
+                  type: string
+                  enum: [fa, en]
+                org_name:
+                  type: string
+                  description: When set, the new account owns this organization.
+                invite_token:
+                  type: string
+                  description: >
+                    When valid for the same address, joins the inviting
+                    organization and skips the OTP.
+      responses:
+        "202":
+          description: Verification sent (same response for new and existing addresses)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignupAccepted"
+        "400":
+          description: Invalid sign-up request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Sign-up is disabled (the route behaves as if it does not exist)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/auth/signup/verify:
+    post:
+      operationId: authSignupVerify
+      summary: Verify the sign-up code and activate the account
+      description: >
+        Consumes the sign-up OTP and the pending password, then returns the same
+        token pair shape as the other auth routes. A disabled sign-up surface is
+        a 404, exactly like the sign-up route.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, code, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                code:
+                  type: string
+                password:
+                  type: string
+                  format: password
+                  writeOnly: true
+      responses:
+        "200":
+          description: Account activated and tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPair"
+        "400":
+          description: Invalid sign-up verification request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Invalid code or password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Sign-up is disabled (the route behaves as if it does not exist)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/orgs:
+    get:
+      operationId: orgList
+      summary: List the caller's organizations
+      description: >
+        Requires the caller's bearer access token. The gateway forwards it to
+        orbit-auth as gRPC authorization metadata and does not verify it
+        locally.
+      responses:
+        "200":
+          description: Organizations the caller belongs to
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationList"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      operationId: orgCreate
+      summary: Create an organization owned by the caller
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+      responses:
+        "200":
+          description: Organization created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationEnvelope"
+        "400":
+          description: Invalid organization name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: The organization cannot be created in its current state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/orgs/{org_id}/members:
+    get:
+      operationId: orgMembersList
+      summary: List an organization's members
+      description: >
+        Requires the caller's bearer access token. A caller who is not an active
+        member and an unknown organization both answer 404.
+      parameters:
+        - name: org_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Organization members
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembershipList"
+        "400":
+          description: Invalid organization id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Organization not found or the caller is not a member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/orgs/{org_id}/invites:
+    post:
+      operationId: orgInviteCreate
+      summary: Invite an email address to an organization
+      description: >
+        Creates or rotates a pending invitation and sends the org_invite email
+        through orbit-notifications. Orbit Auth gates this on the caller being
+        an active member only; a product-level admin check is not applied here.
+      parameters:
+        - name: org_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+      responses:
+        "200":
+          description: Invitation created or rotated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InviteEnvelope"
+        "400":
+          description: Invalid organization id or email
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Organization not found or the caller is not a member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: The invitation cannot be created in the current state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    get:
+      operationId: orgInviteList
+      summary: List an organization's invitations
+      description: Invitation tokens are never returned.
+      parameters:
+        - name: org_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Organization invitations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InviteList"
+        "400":
+          description: Invalid organization id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Organization not found or the caller is not a member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/orgs/{org_id}/invites/{invite_id}:
+    delete:
+      operationId: orgInviteRevoke
+      summary: Revoke a pending organization invitation
+      parameters:
+        - name: org_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: invite_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Invitation revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevokeResponse"
+        "400":
+          description: Invalid organization or invitation id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Organization or invitation not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/invites/accept:
+    post:
+      operationId: inviteAccept
+      summary: Accept an organization invitation
+      description: >
+        Works for any authenticated user, not only an existing member. The
+        account email must match the invitation, which must still be pending and
+        unexpired. Every failure is the same generic invalid-invite error.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  writeOnly: true
+      responses:
+        "200":
+          description: Invitation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InviteEnvelope"
+        "400":
+          description: Invalid invitation token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/session/org:
+    post:
+      operationId: sessionSelectOrg
+      summary: Select the active organization and rotate the session
+      description: >
+        Rotates the presented refresh token and returns a new access/refresh
+        pair carrying the selected organization. The old pair cannot keep
+        selecting organizations.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [org_id, refresh_token]
+              properties:
+                org_id:
+                  type: string
+                  format: uuid
+                refresh_token:
+                  type: string
+                  writeOnly: true
+      responses:
+        "200":
+          description: New token pair for the selected organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPair"
+        "400":
+          description: Invalid organization id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid access or refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Organization not found or the caller is not a member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
 components:
   securitySchemes:
     bearerAuth:
@@ -465,3 +1012,138 @@ components:
       properties:
         error:
           type: string
+    SignupAccepted:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [verification_sent]
+    Organization:
+      type: object
+      required:
+        - id
+        - name
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    OrganizationEnvelope:
+      type: object
+      required:
+        - organization
+      properties:
+        organization:
+          $ref: "#/components/schemas/Organization"
+    OrganizationList:
+      type: object
+      required:
+        - organizations
+      properties:
+        organizations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Organization"
+    Membership:
+      type: object
+      required:
+        - org_id
+        - user_id
+        - status
+        - created_at
+        - updated_at
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          description: active or suspended
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    MembershipList:
+      type: object
+      required:
+        - members
+      properties:
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/Membership"
+    Invite:
+      type: object
+      required:
+        - id
+        - org_id
+        - email
+        - inviter_id
+        - status
+        - expires_at
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        inviter_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          description: pending, accepted or revoked
+        expires_at:
+          type: string
+          format: date-time
+        accepted_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    InviteEnvelope:
+      type: object
+      required:
+        - invite
+      properties:
+        invite:
+          $ref: "#/components/schemas/Invite"
+    InviteList:
+      type: object
+      required:
+        - invites
+      properties:
+        invites:
+          type: array
+          items:
+            $ref: "#/components/schemas/Invite"
+    RevokeResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [revoked]
