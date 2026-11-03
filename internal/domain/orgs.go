@@ -38,6 +38,9 @@ type OrgService interface {
 	CreateOrg(ctx context.Context, name, accessToken string) (Organization, error)
 	ListMyOrgs(ctx context.Context, accessToken string) ([]Organization, error)
 	ListMembers(ctx context.Context, orgID, accessToken string) ([]Membership, error)
+	AddMember(ctx context.Context, orgID, userID, accessToken string) error
+	RemoveMember(ctx context.Context, orgID, userID, accessToken string) error
+	SuspendMember(ctx context.Context, orgID, userID, accessToken string) error
 	InviteMember(ctx context.Context, orgID, email, accessToken string) (Invite, error)
 	AcceptInvite(ctx context.Context, token, accessToken string) (Invite, error)
 	RevokeInvite(ctx context.Context, orgID, inviteID, accessToken string) error
