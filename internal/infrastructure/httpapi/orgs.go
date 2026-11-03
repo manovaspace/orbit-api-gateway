@@ -44,6 +44,10 @@ type createOrgBody struct {
 	Name string `json:"name"`
 }
 
+type addMemberBody struct {
+	UserID string `json:"user_id"`
+}
+
 type inviteMemberBody struct {
 	Email string `json:"email"`
 }
@@ -267,6 +271,46 @@ func (h *handlers) listMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, membershipList{Members: membershipsJSON(members)})
+}
+
+func (h *handlers) addMember(w http.ResponseWriter, r *http.Request) {
+	token, ok := h.requireBearer(w, r)
+	if !ok {
+		return
+	}
+	var body addMemberBody
+	if !decodeJSONBody(w, r, &body) {
+		return
+	}
+	if err := h.svc.AddMember(r.Context(), r.PathValue("org_id"), body.UserID, token); err != nil {
+		writeAppError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, revokeResponse{Status: "added"})
+}
+
+func (h *handlers) removeMember(w http.ResponseWriter, r *http.Request) {
+	token, ok := h.requireBearer(w, r)
+	if !ok {
+		return
+	}
+	if err := h.svc.RemoveMember(r.Context(), r.PathValue("org_id"), r.PathValue("user_id"), token); err != nil {
+		writeAppError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, revokeResponse{Status: "removed"})
+}
+
+func (h *handlers) suspendMember(w http.ResponseWriter, r *http.Request) {
+	token, ok := h.requireBearer(w, r)
+	if !ok {
+		return
+	}
+	if err := h.svc.SuspendMember(r.Context(), r.PathValue("org_id"), r.PathValue("user_id"), token); err != nil {
+		writeAppError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, revokeResponse{Status: "suspended"})
 }
 
 func (h *handlers) createInvite(w http.ResponseWriter, r *http.Request) {

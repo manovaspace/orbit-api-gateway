@@ -171,6 +171,33 @@ func (c *Client) ListMembers(ctx context.Context, orgID, accessToken string) ([]
 	return memberships(resp.GetMembers()), nil
 }
 
+// AddMember adds an existing user to an organization.
+func (c *Client) AddMember(ctx context.Context, orgID, userID, accessToken string) error {
+	_, err := c.orgs.AddMember(callerContext(ctx, accessToken), &authv1.AddMemberRequest{
+		OrgId:  orgID,
+		UserId: userID,
+	})
+	return orgUpstreamError(err)
+}
+
+// RemoveMember removes a user from an organization.
+func (c *Client) RemoveMember(ctx context.Context, orgID, userID, accessToken string) error {
+	_, err := c.orgs.RemoveMember(callerContext(ctx, accessToken), &authv1.RemoveMemberRequest{
+		OrgId:  orgID,
+		UserId: userID,
+	})
+	return orgUpstreamError(err)
+}
+
+// SuspendMember suspends a user's membership.
+func (c *Client) SuspendMember(ctx context.Context, orgID, userID, accessToken string) error {
+	_, err := c.orgs.SuspendMember(callerContext(ctx, accessToken), &authv1.SuspendMemberRequest{
+		OrgId:  orgID,
+		UserId: userID,
+	})
+	return orgUpstreamError(err)
+}
+
 // InviteMember creates or rotates an organization invitation.
 func (c *Client) InviteMember(ctx context.Context, orgID, email, accessToken string) (domain.Invite, error) {
 	resp, err := c.orgs.InviteMember(callerContext(ctx, accessToken), &authv1.InviteMemberRequest{

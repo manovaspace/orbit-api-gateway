@@ -33,6 +33,22 @@ func (s *Service) ListMembers(ctx context.Context, orgID, accessToken string) ([
 	return s.orgs.ListMembers(ctx, orgID, accessToken)
 }
 
+// AddMember adds an existing user to an organization.
+func (s *Service) AddMember(ctx context.Context, orgID, userID, accessToken string) error {
+	return s.orgs.AddMember(ctx, orgID, userID, accessToken)
+}
+
+// RemoveMember removes a user from an organization. Orbit Auth refuses to
+// remove the last active member.
+func (s *Service) RemoveMember(ctx context.Context, orgID, userID, accessToken string) error {
+	return s.orgs.RemoveMember(ctx, orgID, userID, accessToken)
+}
+
+// SuspendMember suspends a user's membership without deleting it.
+func (s *Service) SuspendMember(ctx context.Context, orgID, userID, accessToken string) error {
+	return s.orgs.SuspendMember(ctx, orgID, userID, accessToken)
+}
+
 // InviteMember creates or rotates an organization invitation.
 func (s *Service) InviteMember(ctx context.Context, orgID, email, accessToken string) (domain.Invite, error) {
 	return s.orgs.InviteMember(ctx, orgID, email, accessToken)
