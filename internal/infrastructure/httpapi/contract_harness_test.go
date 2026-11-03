@@ -76,6 +76,7 @@ func newContractEnvWith(t *testing.T, cfg contractConfig, withJWKS bool) *contra
 		Auth:       client,
 		Orgs:       client,
 		Signup:     client,
+		Flags:      fixedFlags{},
 		Limiter:    limiter,
 		Clock:      fixedClock{},
 		Codes:      fixedCodes{},
@@ -134,6 +135,20 @@ func (fixedClock) Now() time.Time {
 type fixedCodes struct{}
 
 func (fixedCodes) NewCode() string { return "123456" }
+
+// fixedFlags serves the platform flag document to the contract environment.
+type fixedFlags struct{}
+
+func (fixedFlags) ListFlags(context.Context) (domain.FlagSet, error) {
+	return domain.FlagSet{
+		Version: "2026-11-03T10:00:00Z",
+		Flags: []domain.FeatureFlag{{
+			Name:        "beta",
+			Enabled:     true,
+			Description: "Beta access",
+		}},
+	}, nil
+}
 
 // send performs one real HTTP request and copies only the headers and body the
 // contract names. Transport framing (Content-Length, Transfer-Encoding, Date)

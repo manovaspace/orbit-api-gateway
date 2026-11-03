@@ -20,6 +20,7 @@ const (
 	routeOrgInviteRev            = "/api/v1/orgs/{org_id}/invites/{invite_id}"
 	routeInviteAccept            = "/api/v1/invites/accept"
 	routeSessionOrg              = "/api/v1/session/org"
+	routeFlags                   = "/api/v1/flags"
 	signupStatusVerificationSent = "verification_sent"
 	revokeStatus                 = "revoked"
 )

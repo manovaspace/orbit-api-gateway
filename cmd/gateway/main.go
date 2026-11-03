@@ -40,6 +40,7 @@ func main() {
 		log.Error("auth client failed", "error", err)
 		os.Exit(1)
 	}
+	authClient.AuthHTTPURL = envOr("AUTH_HTTP_URL", "http://localhost:10101")
 
 	var limiter domain.Limiter
 	if addr := os.Getenv("REDIS_ADDR"); addr != "" {
@@ -62,6 +63,7 @@ func main() {
 		Auth:       authClient,
 		Orgs:       authClient,
 		Signup:     authClient,
+		Flags:      authClient,
 		Limiter:    limiter,
 		Clock:      clock.New(),
 		Codes:      ids.New(),

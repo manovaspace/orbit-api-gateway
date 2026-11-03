@@ -61,6 +61,16 @@ func (f *fakeAuth) ValidateAPIToken(_ context.Context, secret string) (domain.AP
 	return domain.APIIdentity{UserID: "user", Scopes: []string{"read", "write"}}, nil
 }
 
+// fakeFlags answers the platform flag document.
+type fakeFlags struct {
+	set domain.FlagSet
+	err error
+}
+
+func (f fakeFlags) ListFlags(context.Context) (domain.FlagSet, error) {
+	return f.set, f.err
+}
+
 // fakeLimiter answers with one scripted decision and records every key and
 // policy it was asked about.
 type fakeLimiter struct {
@@ -151,6 +161,7 @@ func testService(t *testing.T, mutate func(*Deps, *fakeAuth, *fakeLimiter)) (*Se
 	claims := newFakeClaims()
 	deps := Deps{
 		Auth:       auth,
+		Flags:      fakeFlags{},
 		Limiter:    limiter,
 		Clock:      &fakeClock{now: testNow},
 		Codes:      fakeCodes{code: "123456"},

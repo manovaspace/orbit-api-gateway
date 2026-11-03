@@ -5,6 +5,8 @@ package auth
 
 import (
 	"context"
+	"net/http"
+	"time"
 
 	authv1 "github.com/manovaspace/orbit-auth/api/auth/v1"
 	"google.golang.org/grpc"
@@ -16,19 +18,25 @@ import (
 	"github.com/manovaspace/orbit-api-gateway/internal/domain"
 )
 
-// Client implements domain.AuthService, domain.OrgService and
-// domain.SignupService over gRPC.
+// Client implements domain.AuthService, domain.OrgService, domain.SignupService
+// and domain.FlagSource over gRPC and orbit-auth's HTTP surface.
 type Client struct {
 	api    authv1.AuthServiceClient
 	orgs   authv1.OrgServiceClient
 	signup authv1.SignupServiceClient
 	conn   *grpc.ClientConn
+
+	// AuthHTTPURL is the base URL of orbit-auth's HTTP listener. The flag
+	// document is served there, not over gRPC.
+	AuthHTTPURL string
+	httpClient  *http.Client
 }
 
 var (
 	_ domain.AuthService   = (*Client)(nil)
 	_ domain.OrgService    = (*Client)(nil)
 	_ domain.SignupService = (*Client)(nil)
+	_ domain.FlagSource    = (*Client)(nil)
 )
 
 // NewClient dials the upstream auth service. The caller closes the client.
@@ -40,10 +48,11 @@ func NewClient(addr string, opts ...grpc.DialOption) (*Client, error) {
 		return nil, err
 	}
 	return &Client{
-		api:    authv1.NewAuthServiceClient(conn),
-		orgs:   authv1.NewOrgServiceClient(conn),
-		signup: authv1.NewSignupServiceClient(conn),
-		conn:   conn,
+		api:        authv1.NewAuthServiceClient(conn),
+		orgs:       authv1.NewOrgServiceClient(conn),
+		signup:     authv1.NewSignupServiceClient(conn),
+		conn:       conn,
+		httpClient: &http.Client{Timeout: 5 * time.Second},
 	}, nil
 }
 

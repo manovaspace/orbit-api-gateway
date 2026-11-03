@@ -61,6 +61,12 @@ func New(svc *application.Service, opts Options) *Server {
 		mux.HandleFunc("POST /api/v1/auth/signup/verify", h.wrapIP(routeSignupVerify, domain.SignupIPLimit, h.signupVerify))
 	}
 
+	// Platform feature flags (unauthenticated, public per-IP budget). Browsers
+	// read these before sign-in.
+	if svc.HasFlags() {
+		mux.HandleFunc("GET "+routeFlags, h.wrapIP(routeFlags, domain.OrgRouteLimit, h.flags))
+	}
+
 	// Organizations and invitations. Every call carries the caller's bearer
 	// token to orbit-auth; organization-scoped routes use a per-org budget.
 	if svc.HasOrgs() {
