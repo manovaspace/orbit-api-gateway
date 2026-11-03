@@ -974,6 +974,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/flags:
+    get:
+      operationId: flagsList
+      summary: Read the platform feature-flag document
+      description: >
+        Public and unauthenticated so browsers can read flags before sign-in.
+        The gateway proxies orbit-auth's GET /v1/flags document and asks clients
+        to revalidate via the version field (`Cache-Control: no-cache`).
+      security: []
+      responses:
+        "200":
+          description: Flag document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlagSet"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
 components:
   securitySchemes:
     bearerAuth:
@@ -1147,3 +1175,29 @@ components:
         status:
           type: string
           enum: [revoked]
+    FeatureFlag:
+      type: object
+      required:
+        - name
+        - enabled
+        - description
+      properties:
+        name:
+          type: string
+        enabled:
+          type: boolean
+        description:
+          type: string
+    FlagSet:
+      type: object
+      required:
+        - version
+        - flags
+      properties:
+        version:
+          type: string
+          description: Opaque document version a client can cache against.
+        flags:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeatureFlag"

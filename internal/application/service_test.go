@@ -454,6 +454,24 @@ func TestAssetsAreServedThroughThePort(t *testing.T) {
 	}
 }
 
+func TestListFlagsForwardsToThePort(t *testing.T) {
+	want := domain.FlagSet{
+		Version: "2026-11-03T10:00:00Z",
+		Flags:   []domain.FeatureFlag{{Name: "beta", Enabled: true, Description: "Beta access"}},
+	}
+	svc, _, _, _, _ := testService(t, func(deps *Deps, _ *fakeAuth, _ *fakeLimiter) {
+		deps.Flags = fakeFlags{set: want}
+	})
+
+	got, err := svc.ListFlags(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Version != want.Version || len(got.Flags) != 1 || got.Flags[0] != want.Flags[0] {
+		t.Fatalf("ListFlags = %+v, want %+v", got, want)
+	}
+}
+
 func TestServiceReportsMissingPorts(t *testing.T) {
 	svc := NewService(Deps{})
 	if svc.HasAuth() || svc.HasLimiter() {
