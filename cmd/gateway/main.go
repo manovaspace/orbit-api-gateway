@@ -21,9 +21,11 @@ import (
 	"github.com/manovaspace/orbit-api-gateway/internal/infrastructure/ratelimit"
 )
 
+var version = "dev"
+
 func main() {
 	ctx := context.Background()
-	if err := observability.Configure(observability.ConfigFromEnv("orbit-api-gateway", "0.1.0")); err != nil {
+	if err := observability.Configure(observability.ConfigFromEnv("orbit-api-gateway", version)); err != nil {
 		panic(err)
 	}
 	log := observability.Logger()
