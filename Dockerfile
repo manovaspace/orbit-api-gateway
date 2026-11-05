@@ -19,6 +19,6 @@ RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=builder /gateway /app/gateway
 COPY --from=builder /src/openapi /app/openapi
-EXPOSE 10120 10121
+EXPOSE 10001 10014
 USER nobody
 CMD ["/app/gateway"]

@@ -69,23 +69,23 @@ Agent routing: `openapi` / `orbit-api-gateway` in `handbook/cursor/agent-routing
 | `GET` | `/` | Canonical installer script (`text/x-shellscript`) |
 | `GET` | `/api/v1/openapi/gateway.yaml` | OpenAPI 3.1 specification schema |
 | `GET` | `/api/v1/openapi/manifest.json` | API gateway discovery manifest |
-| `GET` | `/healthz`, `/readyz` | Liveness & readiness on dedicated health port `10121` (`HEALTH_PORT`) |
+| `GET` | `/healthz`, `/readyz` | Liveness & readiness on dedicated health port `10014` (`HEALTH_PORT`) |
 
 ## Configuration
 
-- **Auth upstream:** `AUTH_GRPC_ADDR` (default `localhost:10100`).
+- **Auth upstream:** `AUTH_GRPC_ADDR` (default `localhost:10010`).
 - **Rate limiting:** `REDIS_ADDR` selects the Redis limiter; without it `DEPLOYMENT_ENVIRONMENT=dev` uses the memory limiter and anything else refuses to start. `RATE_LIMIT_TRUST_PROXY=true` reads the client address from `X-Forwarded-For`.
 - **Tokens:** `JWT_SECRET` is required outside dev (`dev-insecure-change-me` in dev). `JWT_PUBLIC_KEYS_DIR` publishes `/.well-known/jwks.json`; it is required outside dev.
-- **Ports:** `HTTP_PORT` (default `10120`), `HEALTH_PORT` (default `10121`).
+- **Ports:** `HTTP_PORT` (default `10001`), `HEALTH_PORT` (default `10014`).
 
 ## Commands
 
 ```bash
-export AUTH_GRPC_ADDR=localhost:10100
+export AUTH_GRPC_ADDR=localhost:10010
 export JWT_SECRET=dev-insecure-change-me
 export DEPLOYMENT_ENVIRONMENT=dev
-export HTTP_PORT=10120
-export HEALTH_PORT=10121
+export HTTP_PORT=10001
+export HEALTH_PORT=10014
 go run ./cmd/gateway
 go test ./... -race -count=1
 ```
