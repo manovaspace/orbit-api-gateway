@@ -35,14 +35,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	authAddr := envOr("AUTH_GRPC_ADDR", "localhost:10100")
+	authAddr := envOr("AUTH_GRPC_ADDR", "localhost:10010")
 	dialOpts := append(observability.GRPCDialOptions(), observability.InternalAuthDialOption())
 	authClient, err := auth.NewClient(authAddr, dialOpts...)
 	if err != nil {
 		log.Error("auth client failed", "error", err)
 		os.Exit(1)
 	}
-	authClient.AuthHTTPURL = envOr("AUTH_HTTP_URL", "http://localhost:10101")
+	authClient.AuthHTTPURL = envOr("AUTH_HTTP_URL", "http://localhost:10011")
 
 	var limiter domain.Limiter
 	if addr := os.Getenv("REDIS_ADDR"); addr != "" {
@@ -93,8 +93,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	httpPort := envOr("HTTP_PORT", "10120")
-	healthPort := envOr("HEALTH_PORT", "10121")
+	httpPort := envOr("HTTP_PORT", "10001")
+	healthPort := envOr("HEALTH_PORT", "10014")
 
 	healthServer := httpapi.NewHealth()
 

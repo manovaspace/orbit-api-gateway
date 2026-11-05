@@ -14,7 +14,7 @@ Product-specific API routes are not bundled here; register them in your deployme
 Requires [orbit-auth](https://github.com/manovaspace/orbit-auth) on gRPC and Redis (or dev memory limiter).
 
 ```bash
-export AUTH_GRPC_ADDR=localhost:10100
+export AUTH_GRPC_ADDR=localhost:10010
 export JWT_SECRET=dev-insecure-change-me
 export DEPLOYMENT_ENVIRONMENT=dev
 go run ./cmd/gateway
@@ -47,9 +47,9 @@ HTTP runs on **Fiber v3** fronting the same `net/http` handlers as before, so ro
 | `GET` | `/` | Serves raw canonical `install.sh` shell script (`text/x-shellscript`) |
 | `GET` | `/api/v1/openapi/gateway.yaml` | OpenAPI 3.1 specification schema |
 | `GET` | `/api/v1/openapi/manifest.json` | API gateway discovery manifest |
-| `GET` | `/healthz`, `/readyz` | Liveness & readiness on dedicated health port `10121` (`HEALTH_PORT`) |
+| `GET` | `/healthz`, `/readyz` | Liveness & readiness on dedicated health port `10014` (`HEALTH_PORT`) |
 
-Default HTTP API: `localhost:10120` (`HTTP_PORT`) · Health: `localhost:10121` (`HEALTH_PORT`).
+Default HTTP API: `localhost:10001` (`HTTP_PORT`) · Health: `localhost:10014` (`HEALTH_PORT`).
 
 ## Layout
 
