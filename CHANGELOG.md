@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0](https://github.com/manovaspace/orbit-api-gateway/compare/v0.4.0...v0.5.0) (2026-11-05)
+
+
+### Features
+
+* **ports:** move orbit-api-gateway into the orbit block ([6628089](https://github.com/manovaspace/orbit-api-gateway/commit/662808926efc53a02d792b94f33844da4519411e))
+* **ports:** move orbit-api-gateway into the orbit block ([c752a42](https://github.com/manovaspace/orbit-api-gateway/commit/c752a42526779ba8ecf3ed1f29756c26d6e1ae7a))
+
 ## [0.4.0](https://github.com/manovaspace/orbit-api-gateway/compare/v0.3.1...v0.4.0) (2026-11-03)
 
 
