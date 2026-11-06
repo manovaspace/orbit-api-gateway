@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0](https://github.com/manovaspace/orbit-api-gateway/compare/v0.5.0...v0.6.0) (2026-11-06)
+
+
+### Features
+
+* **auth:** add audited staff identity and break-glass access ([62dc594](https://github.com/manovaspace/orbit-api-gateway/commit/62dc5948ecbf557999b7dc8d43ff6c1092bd4848))
+* **auth:** add audited staff identity and break-glass access (closes [#11](https://github.com/manovaspace/orbit-api-gateway/issues/11)) ([247403f](https://github.com/manovaspace/orbit-api-gateway/commit/247403f01d220526857f040f0e2e11a7fede0c6b))
+
 ## [0.5.0](https://github.com/manovaspace/orbit-api-gateway/compare/v0.4.0...v0.5.0) (2026-11-05)
 
 
