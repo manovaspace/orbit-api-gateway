@@ -3,7 +3,13 @@
 // receives in Deps.
 package application
 
-import "github.com/manovaspace/orbit-api-gateway/internal/domain"
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/manovaspace/orbit-api-gateway/internal/domain"
+)
 
 // Deps are the service's ports and runtime collaborators.
 type Deps struct {
@@ -17,6 +23,7 @@ type Deps struct {
 	Challenges domain.ChallengeStore
 	Claims     domain.ClaimCache
 	Assets     domain.Assets
+	Audit      domain.AuditStore
 	Logger     func(msg string, args ...any)
 }
 
@@ -33,6 +40,7 @@ type Service struct {
 	challenges domain.ChallengeStore
 	claims     domain.ClaimCache
 	assets     domain.Assets
+	audit      domain.AuditStore
 	logger     func(msg string, args ...any)
 }
 
@@ -53,6 +61,7 @@ func NewService(deps Deps) *Service {
 		challenges: deps.Challenges,
 		claims:     deps.Claims,
 		assets:     deps.Assets,
+		audit:      deps.Audit,
 		logger:     logger,
 	}
 }
@@ -73,3 +82,41 @@ func (s *Service) HasFlags() bool { return s.flags != nil }
 // HasLimiter reports whether rate limiting is wired. Without it no route is
 // wrapped and no rate-limit header is written.
 func (s *Service) HasLimiter() bool { return s.limiter != nil }
+
+// HasAudit reports whether an audit store is wired.
+func (s *Service) HasAudit() bool { return s.audit != nil }
+
+// RecordAudit persists an audit entry.
+func (s *Service) RecordAudit(ctx context.Context, entry domain.AuditEntry) error {
+	if s.audit == nil {
+		return nil
+	}
+	if entry.Timestamp.IsZero() {
+		if s.clock != nil {
+			entry.Timestamp = s.clock.Now()
+		} else {
+			entry.Timestamp = time.Now()
+		}
+	}
+	if entry.ID == "" {
+		if s.codes != nil {
+			entry.ID = fmt.Sprintf("audit-%s-%d", s.codes.NewCode(), entry.Timestamp.UnixNano())
+		} else {
+			entry.ID = fmt.Sprintf("audit-%d", entry.Timestamp.UnixNano())
+		}
+	}
+	return s.audit.Record(ctx, entry)
+}
+
+// ListAuditEntries returns all audit entries for orgID.
+func (s *Service) ListAuditEntries(ctx context.Context, orgID string) ([]domain.AuditEntry, error) {
+	if s.audit == nil {
+		return []domain.AuditEntry{}, nil
+	}
+	return s.audit.ListByOrg(ctx, orgID)
+}
+
+// AuditStore returns the wired domain.AuditStore.
+func (s *Service) AuditStore() domain.AuditStore {
+	return s.audit
+}
