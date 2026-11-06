@@ -22,10 +22,11 @@ import (
 
 // Server wraps the Fiber app so main only starts and stops it.
 type Server struct {
-	app       *fiber.App
-	mux       *http.ServeMux
-	svc       *application.Service
-	jwtSecret string
+	app         *fiber.App
+	mux         *http.ServeMux
+	svc         *application.Service
+	jwtSecret   string
+	staffSecret string
 }
 
 // Options configure the edge.
@@ -35,6 +36,8 @@ type Options struct {
 	// JWTSecret is the HS256 secret for the token middleware a deployment
 	// binary mounts. Empty makes that middleware fail closed.
 	JWTSecret string
+	// StaffSecret is the secret for staff credentials. Defaults to JWTSecret when empty.
+	StaffSecret string
 }
 
 // New builds the platform REST edge (auth + ownership + onboarding + OpenAPI).
@@ -106,6 +109,7 @@ func New(svc *application.Service, opts Options) *Server {
 	server := newServer(observability.HTTPMiddleware(mux), mux)
 	server.svc = svc
 	server.jwtSecret = opts.JWTSecret
+	server.staffSecret = opts.StaffSecret
 	return server
 }
 
@@ -177,7 +181,16 @@ var rateLimitHeaderSpellings = [][2]string{
 // TokenAuth returns the bearer-token middleware for the routes a deployment
 // binary mounts. The platform binary mounts none of them.
 func (s *Server) TokenAuth() *TokenAuth {
-	return NewTokenAuth(s.svc, s.jwtSecret)
+	ta := NewTokenAuth(s.svc, s.jwtSecret)
+	if s.staffSecret != "" {
+		ta.WithStaffSecret(s.staffSecret)
+	}
+	return ta
+}
+
+// StaffAuth returns the staff auth middleware.
+func (s *Server) StaffAuth() *StaffAuth {
+	return NewStaffAuth(s.TokenAuth())
 }
 
 // ServeJWKS publishes a precomputed JWK set document at

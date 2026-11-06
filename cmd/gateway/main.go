@@ -72,13 +72,15 @@ func main() {
 		Challenges: memory.NewChallenges(),
 		Claims:     memory.NewClaims(),
 		Assets:     assets.New("openapi"),
+		Audit:      memory.NewAuditStore(),
 		Logger:     func(msg string, args ...any) { log.Info(msg, args...) },
 	})
 
 	dev := os.Getenv("DEPLOYMENT_ENVIRONMENT") == "dev"
 	srv := httpapi.New(svc, httpapi.Options{
-		TrustProxy: strings.EqualFold(os.Getenv("RATE_LIMIT_TRUST_PROXY"), "true"),
-		JWTSecret:  resolveJWTSecret(os.Getenv("JWT_SECRET"), dev),
+		TrustProxy:  strings.EqualFold(os.Getenv("RATE_LIMIT_TRUST_PROXY"), "true"),
+		JWTSecret:   resolveJWTSecret(os.Getenv("JWT_SECRET"), dev),
+		StaffSecret: os.Getenv("STAFF_SECRET"),
 	})
 	if dir := os.Getenv("JWT_PUBLIC_KEYS_DIR"); dir != "" {
 		doc, err := jwks.Load(dir)
