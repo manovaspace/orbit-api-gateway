@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0](https://github.com/manovaspace/orbit-api-gateway/compare/v0.6.0...v0.7.0) (2026-11-07)
+
+
+### Features
+
+* **orgs:** organization slugs and the public tenant lookup ([5716978](https://github.com/manovaspace/orbit-api-gateway/commit/5716978aa25f5c2ae8d4012248938827465c52dc))
+
+
+### Bug Fixes
+
+* **orgs:** surface org-admin authority and add member role endpoint ([07d48f4](https://github.com/manovaspace/orbit-api-gateway/commit/07d48f47195f4ff0828d14d1d53adf6d33a35e0d)), closes [#67](https://github.com/manovaspace/orbit-api-gateway/issues/67)
+* **orgs:** surface org-admin authority, member roles, slugs and the public tenant lookup ([325b750](https://github.com/manovaspace/orbit-api-gateway/commit/325b7507286fc63d05512e17255de3ca95afe9ef))
+
 ## [0.6.0](https://github.com/manovaspace/orbit-api-gateway/compare/v0.5.0...v0.6.0) (2026-11-06)
 
 
