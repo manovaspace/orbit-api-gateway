@@ -48,7 +48,26 @@ func (s *orgSignupStub) ListMembers(ctx context.Context, in *authv1.ListMembersR
 	if err := s.record(ctx); err != nil {
 		return nil, err
 	}
-	return &authv1.ListMembersResponse{Members: []*authv1.Membership{{OrgId: in.GetOrgId(), UserId: "user-1", Status: "active"}}}, nil
+	return &authv1.ListMembersResponse{Members: []*authv1.Membership{{OrgId: in.GetOrgId(), UserId: "user-1", Status: "active", Role: "owner"}}}, nil
+}
+
+func (s *orgSignupStub) AddMember(ctx context.Context, _ *authv1.AddMemberRequest) (*authv1.AddMemberResponse, error) {
+	return &authv1.AddMemberResponse{}, s.record(ctx)
+}
+
+func (s *orgSignupStub) RemoveMember(ctx context.Context, _ *authv1.RemoveMemberRequest) (*authv1.RemoveMemberResponse, error) {
+	return &authv1.RemoveMemberResponse{}, s.record(ctx)
+}
+
+func (s *orgSignupStub) SuspendMember(ctx context.Context, _ *authv1.SuspendMemberRequest) (*authv1.SuspendMemberResponse, error) {
+	return &authv1.SuspendMemberResponse{}, s.record(ctx)
+}
+
+func (s *orgSignupStub) SetMemberRole(ctx context.Context, in *authv1.SetMemberRoleRequest) (*authv1.SetMemberRoleResponse, error) {
+	if err := s.record(ctx); err != nil {
+		return nil, err
+	}
+	return &authv1.SetMemberRoleResponse{Membership: &authv1.Membership{OrgId: in.GetOrgId(), UserId: in.GetUserId(), Status: "active", Role: in.GetRole()}}, nil
 }
 
 func (s *orgSignupStub) InviteMember(ctx context.Context, in *authv1.InviteMemberRequest) (*authv1.InviteMemberResponse, error) {
@@ -137,6 +156,19 @@ func TestOrgAndSignupCallsForwardTheBearerAndMapTheirTypes(t *testing.T) {
 	if err != nil || len(members) != 1 || members[0].UserID != "user-1" {
 		t.Fatalf("ListMembers = %+v, %v", members, err)
 	}
+	if err := client.AddMember(ctx, "org-1", "user-2", "token-1"); err != nil {
+		t.Fatalf("AddMember = %v (a successful write must not be an error)", err)
+	}
+	if err := client.RemoveMember(ctx, "org-1", "user-2", "token-1"); err != nil {
+		t.Fatalf("RemoveMember = %v", err)
+	}
+	if err := client.SuspendMember(ctx, "org-1", "user-2", "token-1"); err != nil {
+		t.Fatalf("SuspendMember = %v", err)
+	}
+	changed, err := client.SetMemberRole(ctx, "org-1", "user-2", "admin", "token-1")
+	if err != nil || changed.Role != "admin" || changed.UserID != "user-2" {
+		t.Fatalf("SetMemberRole = %+v, %v", changed, err)
+	}
 	invite, err := client.InviteMember(ctx, "org-1", "person@example.com", "token-1")
 	if err != nil || invite.Email != "person@example.com" {
 		t.Fatalf("InviteMember = %+v, %v", invite, err)
@@ -177,7 +209,7 @@ func TestOrgStatusMapping(t *testing.T) {
 		{"not found", status.Error(codes.NotFound, "missing"), domain.KindNotFound},
 		{"failed precondition", status.Error(codes.FailedPrecondition, "last owner"), domain.KindConflict},
 		{"resource exhausted", status.Error(codes.ResourceExhausted, "slow down"), domain.KindResourceExhausted},
-		{"permission denied is a gateway failure", status.Error(codes.PermissionDenied, "no"), domain.KindBadGateway},
+		{"permission denied is forbidden", status.Error(codes.PermissionDenied, "no"), domain.KindPermissionDenied},
 		{"internal hides the detail", status.Error(codes.Internal, "pg: reset"), domain.KindBadGateway},
 	}
 	for _, tc := range tests {

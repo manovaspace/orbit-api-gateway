@@ -198,6 +198,19 @@ func (c *Client) SuspendMember(ctx context.Context, orgID, userID, accessToken s
 	return orgUpstreamError(err)
 }
 
+// SetMemberRole changes a member's organization administration tier.
+func (c *Client) SetMemberRole(ctx context.Context, orgID, userID, role, accessToken string) (domain.Membership, error) {
+	resp, err := c.orgs.SetMemberRole(callerContext(ctx, accessToken), &authv1.SetMemberRoleRequest{
+		OrgId:  orgID,
+		UserId: userID,
+		Role:   role,
+	})
+	if err != nil {
+		return domain.Membership{}, orgUpstreamError(err)
+	}
+	return membership(resp.GetMembership()), nil
+}
+
 // InviteMember creates or rotates an organization invitation.
 func (c *Client) InviteMember(ctx context.Context, orgID, email, accessToken string) (domain.Invite, error) {
 	resp, err := c.orgs.InviteMember(callerContext(ctx, accessToken), &authv1.InviteMemberRequest{
@@ -292,16 +305,21 @@ func organizations(orgs []*authv1.Organization) []domain.Organization {
 	return out
 }
 
+func membership(in *authv1.Membership) domain.Membership {
+	return domain.Membership{
+		OrgID:     in.GetOrgId(),
+		UserID:    in.GetUserId(),
+		Status:    in.GetStatus(),
+		Role:      in.GetRole(),
+		CreatedAt: in.GetCreatedAt(),
+		UpdatedAt: in.GetUpdatedAt(),
+	}
+}
+
 func memberships(members []*authv1.Membership) []domain.Membership {
 	out := make([]domain.Membership, 0, len(members))
 	for _, member := range members {
-		out = append(out, domain.Membership{
-			OrgID:     member.GetOrgId(),
-			UserID:    member.GetUserId(),
-			Status:    member.GetStatus(),
-			CreatedAt: member.GetCreatedAt(),
-			UpdatedAt: member.GetUpdatedAt(),
-		})
+		out = append(out, membership(member))
 	}
 	return out
 }
@@ -351,15 +369,21 @@ func upstreamError(err error) error {
 
 // orgUpstreamError is the mapping for organization and invitation calls. It
 // keeps NotFound (including a non-member organization) distinct from an
-// upstream failure, and turns a failed precondition into a conflict so the edge
-// answers 409.
+// upstream failure, turns PermissionDenied (a member without organization
+// administration authority) into a 403, and turns a failed precondition into a
+// conflict so the edge answers 409. A nil error stays nil.
 func orgUpstreamError(err error) error {
+	if err == nil {
+		return nil
+	}
 	if st, ok := status.FromError(err); ok {
 		switch st.Code() {
 		case codes.InvalidArgument:
 			return domain.NewError(domain.KindInvalidArgument, st.Message())
 		case codes.Unauthenticated:
 			return domain.NewError(domain.KindUnauthenticated, st.Message())
+		case codes.PermissionDenied:
+			return domain.NewError(domain.KindPermissionDenied, st.Message())
 		case codes.NotFound:
 			return domain.NewError(domain.KindNotFound, st.Message())
 		case codes.FailedPrecondition:

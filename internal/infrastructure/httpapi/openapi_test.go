@@ -27,6 +27,7 @@ var platformOpenAPIRoutes = []struct {
 	{"post", "/api/v1/orgs/{org_id}/members", "orgMemberAdd"},
 	{"delete", "/api/v1/orgs/{org_id}/members/{user_id}", "orgMemberRemove"},
 	{"post", "/api/v1/orgs/{org_id}/members/{user_id}/suspend", "orgMemberSuspend"},
+	{"put", "/api/v1/orgs/{org_id}/members/{user_id}/role", "orgMemberRoleSet"},
 	{"post", "/api/v1/orgs/{org_id}/invites", "orgInviteCreate"},
 	{"get", "/api/v1/orgs/{org_id}/invites", "orgInviteList"},
 	{"delete", "/api/v1/orgs/{org_id}/invites/{invite_id}", "orgInviteRevoke"},

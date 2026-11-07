@@ -16,6 +16,7 @@ const (
 	routeOrgList                 = "/api/v1/orgs"
 	routeOrgCreate               = "/api/v1/orgs"
 	routeOrgMembers              = "/api/v1/orgs/{org_id}/members"
+	routeOrgMemberRole           = "/api/v1/orgs/{org_id}/members/{user_id}/role"
 	routeOrgInvites              = "/api/v1/orgs/{org_id}/invites"
 	routeOrgInviteRev            = "/api/v1/orgs/{org_id}/invites/{invite_id}"
 	routeInviteAccept            = "/api/v1/invites/accept"
@@ -46,6 +47,14 @@ type createOrgBody struct {
 
 type addMemberBody struct {
 	UserID string `json:"user_id"`
+}
+
+type setMemberRoleBody struct {
+	Role string `json:"role"`
+}
+
+type membershipEnvelope struct {
+	Membership membershipJSON `json:"membership"`
 }
 
 type inviteMemberBody struct {
@@ -84,6 +93,7 @@ type membershipJSON struct {
 	OrgID     string `json:"org_id"`
 	UserID    string `json:"user_id"`
 	Status    string `json:"status"`
+	Role      string `json:"role"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
 }
@@ -313,6 +323,23 @@ func (h *handlers) suspendMember(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, revokeResponse{Status: "suspended"})
 }
 
+func (h *handlers) setMemberRole(w http.ResponseWriter, r *http.Request) {
+	token, ok := h.requireBearer(w, r)
+	if !ok {
+		return
+	}
+	var body setMemberRoleBody
+	if !decodeJSONBody(w, r, &body) {
+		return
+	}
+	member, err := h.svc.SetMemberRole(r.Context(), r.PathValue("org_id"), r.PathValue("user_id"), strings.TrimSpace(body.Role), token)
+	if err != nil {
+		writeAppError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, membershipEnvelope{Membership: membershipJSONFrom(member)})
+}
+
 func (h *handlers) createInvite(w http.ResponseWriter, r *http.Request) {
 	token, ok := h.requireBearer(w, r)
 	if !ok {
@@ -409,16 +436,21 @@ func organizationsJSON(orgs []domain.Organization) []organizationJSON {
 	return out
 }
 
+func membershipJSONFrom(member domain.Membership) membershipJSON {
+	return membershipJSON{
+		OrgID:     member.OrgID,
+		UserID:    member.UserID,
+		Status:    member.Status,
+		Role:      member.Role,
+		CreatedAt: member.CreatedAt,
+		UpdatedAt: member.UpdatedAt,
+	}
+}
+
 func membershipsJSON(members []domain.Membership) []membershipJSON {
 	out := make([]membershipJSON, 0, len(members))
 	for _, member := range members {
-		out = append(out, membershipJSON{
-			OrgID:     member.OrgID,
-			UserID:    member.UserID,
-			Status:    member.Status,
-			CreatedAt: member.CreatedAt,
-			UpdatedAt: member.UpdatedAt,
-		})
+		out = append(out, membershipJSONFrom(member))
 	}
 	return out
 }

@@ -81,6 +81,7 @@ func New(svc *application.Service, opts Options) *Server {
 		mux.HandleFunc("POST /api/v1/orgs/{org_id}/members", h.wrapOrg(routeOrgMembers, h.addMember))
 		mux.HandleFunc("DELETE /api/v1/orgs/{org_id}/members/{user_id}", h.wrapOrg(routeOrgMembers, h.removeMember))
 		mux.HandleFunc("POST /api/v1/orgs/{org_id}/members/{user_id}/suspend", h.wrapOrg(routeOrgMembers, h.suspendMember))
+		mux.HandleFunc("PUT /api/v1/orgs/{org_id}/members/{user_id}/role", h.wrapOrg(routeOrgMemberRole, h.setMemberRole))
 		mux.HandleFunc("POST /api/v1/orgs/{org_id}/invites", h.wrapOrg(routeOrgInvites, h.createInvite))
 		mux.HandleFunc("GET /api/v1/orgs/{org_id}/invites", h.wrapOrg(routeOrgInvites, h.listInvites))
 		mux.HandleFunc("DELETE /api/v1/orgs/{org_id}/invites/{invite_id}", h.wrapOrg(routeOrgInviteRev, h.revokeInvite))

@@ -12,9 +12,11 @@ type Organization struct {
 
 // Membership is one user's membership in an organization.
 type Membership struct {
-	OrgID     string
-	UserID    string
-	Status    string
+	OrgID  string
+	UserID string
+	Status string
+	// Role is the organization administration tier: owner, admin or member.
+	Role      string
 	CreatedAt string
 	UpdatedAt string
 }
@@ -41,6 +43,7 @@ type OrgService interface {
 	AddMember(ctx context.Context, orgID, userID, accessToken string) error
 	RemoveMember(ctx context.Context, orgID, userID, accessToken string) error
 	SuspendMember(ctx context.Context, orgID, userID, accessToken string) error
+	SetMemberRole(ctx context.Context, orgID, userID, role, accessToken string) (Membership, error)
 	InviteMember(ctx context.Context, orgID, email, accessToken string) (Invite, error)
 	AcceptInvite(ctx context.Context, token, accessToken string) (Invite, error)
 	RevokeInvite(ctx context.Context, orgID, inviteID, accessToken string) error

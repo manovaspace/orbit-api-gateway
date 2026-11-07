@@ -5,10 +5,13 @@ info:
   description: |
     REST edge for Orbit Auth, organizations and invitations.
 
-    Direct member add, remove and suspend are intentionally not exposed. Orbit
-    Auth gates those calls on the caller being a member only, so a gateway
-    route would let any member remove the organization owner. They wait for a
-    product-level admin check.
+    Membership and invitation writes are authorized by Orbit Auth, not here.
+    Every membership has an administration tier (owner, admin or member). The
+    caller must be an active owner or admin; an admin can change only plain
+    members; only an owner can grant owner or admin; any member can remove
+    themselves. A caller without that authority gets 403, and the last active
+    owner can never be removed, suspended or demoted (409). The tier is not a
+    product role: products keep their own roles and permissions.
 servers:
   - url: /
 security:
@@ -699,8 +702,8 @@ paths:
       summary: Add an existing user to an organization
       description: >
         Requires the caller's bearer access token. Orbit Auth derives the actor
-        from the token and refuses a caller without membership management
-        rights; a product-level admin check is not applied here.
+        from the token and answers 403 unless the caller is an active owner or
+        admin. The user joins as a plain member.
       parameters:
         - name: org_id
           in: path
@@ -734,7 +737,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
-          description: Caller may not manage members
+          description: Caller is not an organization owner or admin, or may not act on this member
           content:
             application/json:
               schema:
@@ -768,7 +771,9 @@ paths:
       operationId: orgMemberRemove
       summary: Remove a user from an organization
       description: >
-        Orbit Auth refuses to remove the last active member and answers 409.
+        The caller must be an owner, or an admin removing a plain member, or the
+        member themselves. Orbit Auth refuses to remove the last active member
+        or the last active owner and answers 409.
       parameters:
         - name: org_id
           in: path
@@ -802,7 +807,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
-          description: Caller may not manage members
+          description: Caller is not an organization owner or admin, or may not act on this member
           content:
             application/json:
               schema:
@@ -814,7 +819,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: Refused because this is the last active member
+          description: Refused because this is the last active member or the last active owner
           content:
             application/json:
               schema:
@@ -837,7 +842,9 @@ paths:
       summary: Suspend a user's membership
       description: >
         Suspension keeps the membership row and drops the org claim on the next
-        token refresh. The last active member cannot be suspended.
+        token refresh. The caller must be an owner, or an admin suspending a
+        plain member. The last active member and the last active owner cannot
+        be suspended.
       parameters:
         - name: org_id
           in: path
@@ -871,7 +878,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
-          description: Caller may not manage members
+          description: Caller is not an organization owner or admin, or may not act on this member
           content:
             application/json:
               schema:
@@ -883,7 +890,88 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: Refused because this is the last active member
+          description: Refused because this is the last active member or the last active owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/orgs/{org_id}/members/{user_id}/role:
+    put:
+      operationId: orgMemberRoleSet
+      summary: Change a member's organization administration tier
+      description: >
+        Sets the member's role to owner, admin or member. Only an owner can
+        grant owner or admin; an admin cannot change roles. The last active
+        owner cannot be demoted (409). Not a product role.
+      parameters:
+        - name: org_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  type: string
+                  enum: [owner, admin, member]
+      responses:
+        "200":
+          description: Role changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MembershipEnvelope"
+        "400":
+          description: Invalid organization id, user id or role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Caller is not an organization owner, or may not grant this role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Organization or membership not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Refused because this is the last active owner
           content:
             application/json:
               schema:
@@ -906,8 +994,8 @@ paths:
       summary: Invite an email address to an organization
       description: >
         Creates or rotates a pending invitation and sends the org_invite email
-        through orbit-notifications. Orbit Auth gates this on the caller being
-        an active member only; a product-level admin check is not applied here.
+        through orbit-notifications. The caller must be an active owner or
+        admin of the organization; any other member gets 403.
       parameters:
         - name: org_id
           in: path
@@ -941,6 +1029,12 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "401":
           description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Caller is not an organization owner or admin
           content:
             application/json:
               schema:
@@ -999,6 +1093,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Caller is not an organization owner or admin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: Organization not found or the caller is not a member
           content:
@@ -1049,6 +1149,12 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "401":
           description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Caller is not an organization owner or admin
           content:
             application/json:
               schema:
@@ -1295,6 +1401,7 @@ components:
         - org_id
         - user_id
         - status
+        - role
         - created_at
         - updated_at
       properties:
@@ -1307,12 +1414,23 @@ components:
         status:
           type: string
           description: active or suspended
+        role:
+          type: string
+          enum: [owner, admin, member]
+          description: Organization administration tier, not a product role
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
+    MembershipEnvelope:
+      type: object
+      required:
+        - membership
+      properties:
+        membership:
+          $ref: "#/components/schemas/Membership"
     MembershipList:
       type: object
       required:

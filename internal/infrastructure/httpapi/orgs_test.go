@@ -43,6 +43,7 @@ type orgSignupStub struct {
 	inviteToken   string
 	name          string
 	refreshToken  string
+	role          string
 }
 
 func (s *orgSignupStub) record(ctx context.Context) error {
@@ -113,9 +114,58 @@ func (s *orgSignupStub) ListMembers(ctx context.Context, in *authv1.ListMembersR
 		OrgId:     in.GetOrgId(),
 		UserId:    "user-1",
 		Status:    "active",
+		Role:      "owner",
 		CreatedAt: "2026-11-02T10:00:00Z",
 		UpdatedAt: "2026-11-02T10:00:00Z",
 	}}}, nil
+}
+
+func (s *orgSignupStub) AddMember(ctx context.Context, in *authv1.AddMemberRequest) (*authv1.AddMemberResponse, error) {
+	s.mu.Lock()
+	s.orgID = in.GetOrgId()
+	s.mu.Unlock()
+	if err := s.record(ctx); err != nil {
+		return nil, err
+	}
+	return &authv1.AddMemberResponse{}, nil
+}
+
+func (s *orgSignupStub) RemoveMember(ctx context.Context, in *authv1.RemoveMemberRequest) (*authv1.RemoveMemberResponse, error) {
+	s.mu.Lock()
+	s.orgID = in.GetOrgId()
+	s.mu.Unlock()
+	if err := s.record(ctx); err != nil {
+		return nil, err
+	}
+	return &authv1.RemoveMemberResponse{}, nil
+}
+
+func (s *orgSignupStub) SuspendMember(ctx context.Context, in *authv1.SuspendMemberRequest) (*authv1.SuspendMemberResponse, error) {
+	s.mu.Lock()
+	s.orgID = in.GetOrgId()
+	s.mu.Unlock()
+	if err := s.record(ctx); err != nil {
+		return nil, err
+	}
+	return &authv1.SuspendMemberResponse{}, nil
+}
+
+func (s *orgSignupStub) SetMemberRole(ctx context.Context, in *authv1.SetMemberRoleRequest) (*authv1.SetMemberRoleResponse, error) {
+	s.mu.Lock()
+	s.orgID = in.GetOrgId()
+	s.role = in.GetRole()
+	s.mu.Unlock()
+	if err := s.record(ctx); err != nil {
+		return nil, err
+	}
+	return &authv1.SetMemberRoleResponse{Membership: &authv1.Membership{
+		OrgId:     in.GetOrgId(),
+		UserId:    in.GetUserId(),
+		Status:    "active",
+		Role:      in.GetRole(),
+		CreatedAt: "2026-11-02T10:00:00Z",
+		UpdatedAt: "2026-11-02T10:00:00Z",
+	}}, nil
 }
 
 func (s *orgSignupStub) InviteMember(ctx context.Context, in *authv1.InviteMemberRequest) (*authv1.InviteMemberResponse, error) {
@@ -316,7 +366,27 @@ func TestOrgRoutesForwardTheBearerTokenAndReturnTheirShapes(t *testing.T) {
 		{
 			name: "list members", method: http.MethodGet, path: "/api/v1/orgs/org-1/members",
 			wantStatus: http.StatusOK,
-			wantBody:   `{"members":[{"org_id":"org-1","user_id":"user-1","status":"active","created_at":"2026-11-02T10:00:00Z","updated_at":"2026-11-02T10:00:00Z"}]}` + "\n",
+			wantBody:   `{"members":[{"org_id":"org-1","user_id":"user-1","status":"active","role":"owner","created_at":"2026-11-02T10:00:00Z","updated_at":"2026-11-02T10:00:00Z"}]}` + "\n",
+		},
+		{
+			name: "add member", method: http.MethodPost, path: "/api/v1/orgs/org-1/members", body: `{"user_id":"user-2"}`,
+			wantStatus: http.StatusOK,
+			wantBody:   `{"status":"added"}` + "\n",
+		},
+		{
+			name: "remove member", method: http.MethodDelete, path: "/api/v1/orgs/org-1/members/user-2",
+			wantStatus: http.StatusOK,
+			wantBody:   `{"status":"removed"}` + "\n",
+		},
+		{
+			name: "suspend member", method: http.MethodPost, path: "/api/v1/orgs/org-1/members/user-2/suspend",
+			wantStatus: http.StatusOK,
+			wantBody:   `{"status":"suspended"}` + "\n",
+		},
+		{
+			name: "set member role", method: http.MethodPut, path: "/api/v1/orgs/org-1/members/user-2/role", body: `{"role":" admin "}`,
+			wantStatus: http.StatusOK,
+			wantBody:   `{"membership":{"org_id":"org-1","user_id":"user-2","status":"active","role":"admin","created_at":"2026-11-02T10:00:00Z","updated_at":"2026-11-02T10:00:00Z"}}` + "\n",
 		},
 		{
 			name: "create invite", method: http.MethodPost, path: "/api/v1/orgs/org-1/invites", body: `{"email":"person@example.com"}`,
@@ -382,6 +452,10 @@ func TestOrgRoutesRequireABearerToken(t *testing.T) {
 		{"list orgs", http.MethodGet, routeOrgList, ""},
 		{"create org", http.MethodPost, routeOrgCreate, `{"name":"Acme"}`},
 		{"list members", http.MethodGet, "/api/v1/orgs/org-1/members", ""},
+		{"add member", http.MethodPost, "/api/v1/orgs/org-1/members", `{"user_id":"user-2"}`},
+		{"remove member", http.MethodDelete, "/api/v1/orgs/org-1/members/user-2", ""},
+		{"suspend member", http.MethodPost, "/api/v1/orgs/org-1/members/user-2/suspend", ""},
+		{"set member role", http.MethodPut, "/api/v1/orgs/org-1/members/user-2/role", `{"role":"admin"}`},
 		{"create invite", http.MethodPost, "/api/v1/orgs/org-1/invites", `{"email":"p@example.com"}`},
 		{"list invites", http.MethodGet, "/api/v1/orgs/org-1/invites", ""},
 		{"revoke invite", http.MethodDelete, "/api/v1/orgs/org-1/invites/invite-1", ""},
@@ -415,7 +489,7 @@ func TestOrgStatusMapping(t *testing.T) {
 		{"not found", status.Error(codes.NotFound, "organization not found"), http.StatusNotFound, `{"error":"organization not found"}` + "\n"},
 		{"failed precondition", status.Error(codes.FailedPrecondition, "last owner"), http.StatusConflict, `{"error":"last owner"}` + "\n"},
 		{"resource exhausted", status.Error(codes.ResourceExhausted, "slow down"), http.StatusTooManyRequests, `{"error":"slow down"}` + "\n"},
-		{"permission denied is a gateway failure", status.Error(codes.PermissionDenied, "secret detail"), http.StatusBadGateway, `{"error":"upstream error"}` + "\n"},
+		{"permission denied is forbidden", status.Error(codes.PermissionDenied, "organization administration required"), http.StatusForbidden, `{"error":"organization administration required"}` + "\n"},
 		{"internal hides the detail", status.Error(codes.Internal, "pg: connection reset"), http.StatusBadGateway, `{"error":"upstream error"}` + "\n"},
 		{"plain error", context.DeadlineExceeded, http.StatusBadGateway, `{"error":"upstream error"}` + "\n"},
 	}
@@ -621,4 +695,65 @@ func (l *recordingLimiter) Allow(_ context.Context, key string, policy domain.Po
 		return domain.Decision{Allowed: false, Limit: policy.Limit, RetryAfter: time.Second}, nil
 	}
 	return domain.Decision{Allowed: true, Limit: policy.Limit, Remaining: policy.Limit - 1}, nil
+}
+
+// TestMembershipWritesSurfaceOrbitAuthAuthorization proves a member without
+// organization administration authority gets 403 on every membership and
+// invitation write, and a last-owner refusal is a 409, whatever the route.
+func TestMembershipWritesSurfaceOrbitAuthAuthorization(t *testing.T) {
+	routes := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+	}{
+		{"add member", http.MethodPost, "/api/v1/orgs/org-1/members", `{"user_id":"user-2"}`},
+		{"remove member", http.MethodDelete, "/api/v1/orgs/org-1/members/user-2", ""},
+		{"suspend member", http.MethodPost, "/api/v1/orgs/org-1/members/user-2/suspend", ""},
+		{"set member role", http.MethodPut, "/api/v1/orgs/org-1/members/user-2/role", `{"role":"admin"}`},
+		{"create invite", http.MethodPost, "/api/v1/orgs/org-1/invites", `{"email":"p@example.com"}`},
+		{"list invites", http.MethodGet, "/api/v1/orgs/org-1/invites", ""},
+		{"revoke invite", http.MethodDelete, "/api/v1/orgs/org-1/invites/invite-1", ""},
+	}
+	for _, route := range routes {
+		t.Run(route.name+" forbidden", func(t *testing.T) {
+			base := newOrgSignupEnv(t, &orgSignupStub{err: status.Error(codes.PermissionDenied, "organization administration required")}, nil)
+			headers := bearer()
+			if route.body != "" {
+				headers["Content-Type"] = "application/json"
+			}
+			got := send(t, base, route.method, route.path, route.body, headers)
+			if got.Status != http.StatusForbidden || got.Body != `{"error":"organization administration required"}`+"\n" {
+				t.Fatalf("got %d %q, want 403 with the orbit-auth message", got.Status, got.Body)
+			}
+		})
+		t.Run(route.name+" last owner", func(t *testing.T) {
+			base := newOrgSignupEnv(t, &orgSignupStub{err: status.Error(codes.FailedPrecondition, "organization must keep at least one active owner")}, nil)
+			headers := bearer()
+			if route.body != "" {
+				headers["Content-Type"] = "application/json"
+			}
+			got := send(t, base, route.method, route.path, route.body, headers)
+			if got.Status != http.StatusConflict {
+				t.Fatalf("status = %d, want 409", got.Status)
+			}
+		})
+	}
+}
+
+func TestSetMemberRoleForwardsTheTrimmedRole(t *testing.T) {
+	stub := &orgSignupStub{}
+	base := newOrgSignupEnv(t, stub, nil)
+	headers := bearer()
+	headers["Content-Type"] = "application/json"
+
+	got := send(t, base, http.MethodPut, "/api/v1/orgs/org-1/members/user-2/role", `{"role":" owner "}`, headers)
+	if got.Status != http.StatusOK {
+		t.Fatalf("status = %d, body %q", got.Status, got.Body)
+	}
+	stub.mu.Lock()
+	defer stub.mu.Unlock()
+	if stub.role != "owner" || stub.orgID != "org-1" {
+		t.Fatalf("forwarded role %q org %q, want owner org-1", stub.role, stub.orgID)
+	}
 }

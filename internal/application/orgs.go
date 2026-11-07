@@ -39,7 +39,7 @@ func (s *Service) AddMember(ctx context.Context, orgID, userID, accessToken stri
 }
 
 // RemoveMember removes a user from an organization. Orbit Auth refuses to
-// remove the last active member.
+// remove the last active member or the last active owner.
 func (s *Service) RemoveMember(ctx context.Context, orgID, userID, accessToken string) error {
 	return s.orgs.RemoveMember(ctx, orgID, userID, accessToken)
 }
@@ -47,6 +47,12 @@ func (s *Service) RemoveMember(ctx context.Context, orgID, userID, accessToken s
 // SuspendMember suspends a user's membership without deleting it.
 func (s *Service) SuspendMember(ctx context.Context, orgID, userID, accessToken string) error {
 	return s.orgs.SuspendMember(ctx, orgID, userID, accessToken)
+}
+
+// SetMemberRole changes a member's organization administration tier. Orbit
+// Auth decides who may grant which tier.
+func (s *Service) SetMemberRole(ctx context.Context, orgID, userID, role, accessToken string) (domain.Membership, error) {
+	return s.orgs.SetMemberRole(ctx, orgID, userID, role, accessToken)
 }
 
 // InviteMember creates or rotates an organization invitation.
