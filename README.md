@@ -36,7 +36,11 @@ HTTP runs on **Fiber v3** fronting the same `net/http` handlers as before, so ro
 | `GET` | `/api/v1/orgs` | Proxies to `orbit-auth` `OrgService.ListMyOrgs` (bearer access token) |
 | `POST` | `/api/v1/orgs` | Proxies to `orbit-auth` `OrgService.CreateOrg` (`name`) |
 | `GET` | `/api/v1/orgs/{org_id}/members` | Proxies to `orbit-auth` `OrgService.ListMembers` (non-member is 404) |
-| `POST` | `/api/v1/orgs/{org_id}/invites` | Proxies to `orbit-auth` `OrgService.InviteMember` (`email`) |
+| `POST` | `/api/v1/orgs/{org_id}/members` | Proxies to `orbit-auth` `OrgService.AddMember` (`user_id`); owner or admin only, else 403 |
+| `DELETE` | `/api/v1/orgs/{org_id}/members/{user_id}` | Proxies to `orbit-auth` `OrgService.RemoveMember`; owner, an admin removing a plain member, or the member themselves; last active owner is 409 |
+| `POST` | `/api/v1/orgs/{org_id}/members/{user_id}/suspend` | Proxies to `orbit-auth` `OrgService.SuspendMember`; owner or an admin suspending a plain member |
+| `PUT` | `/api/v1/orgs/{org_id}/members/{user_id}/role` | Proxies to `orbit-auth` `OrgService.SetMemberRole` (`role`: `owner`, `admin`, `member`); only an owner grants `owner` or `admin` |
+| `POST` | `/api/v1/orgs/{org_id}/invites` | Proxies to `orbit-auth` `OrgService.InviteMember` (`email`); owner or admin only, else 403 |
 | `GET` | `/api/v1/orgs/{org_id}/invites` | Proxies to `orbit-auth` `OrgService.ListInvites` |
 | `DELETE` | `/api/v1/orgs/{org_id}/invites/{invite_id}` | Proxies to `orbit-auth` `OrgService.RevokeInvite` |
 | `POST` | `/api/v1/invites/accept` | Proxies to `orbit-auth` `OrgService.AcceptInvite` (`token`) |
