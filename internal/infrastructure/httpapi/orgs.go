@@ -16,6 +16,9 @@ const (
 	routeOrgList                 = "/api/v1/orgs"
 	routeOrgCreate               = "/api/v1/orgs"
 	routeOrgMembers              = "/api/v1/orgs/{org_id}/members"
+	routeOrgMemberRole           = "/api/v1/orgs/{org_id}/members/{user_id}/role"
+	routeOrgSlug                 = "/api/v1/orgs/{org_id}/slug"
+	routeTenantResolve           = "/api/v1/public/tenants/{slug}"
 	routeOrgInvites              = "/api/v1/orgs/{org_id}/invites"
 	routeOrgInviteRev            = "/api/v1/orgs/{org_id}/invites/{invite_id}"
 	routeInviteAccept            = "/api/v1/invites/accept"
@@ -42,10 +45,31 @@ type signupVerifyBody struct {
 
 type createOrgBody struct {
 	Name string `json:"name"`
+	// Slug is optional: Orbit Auth derives one from the name when it is empty.
+	Slug string `json:"slug"`
+}
+
+type setOrgSlugBody struct {
+	Slug string `json:"slug"`
+}
+
+type tenantJSON struct {
+	OrgID   string `json:"org_id"`
+	Slug    string `json:"slug"`
+	Name    string `json:"name"`
+	Retired bool   `json:"retired"`
 }
 
 type addMemberBody struct {
 	UserID string `json:"user_id"`
+}
+
+type setMemberRoleBody struct {
+	Role string `json:"role"`
+}
+
+type membershipEnvelope struct {
+	Membership membershipJSON `json:"membership"`
 }
 
 type inviteMemberBody struct {
@@ -68,6 +92,7 @@ type signupAcceptedResponse struct {
 type organizationJSON struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
+	Slug      string `json:"slug"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
 }
@@ -84,6 +109,7 @@ type membershipJSON struct {
 	OrgID     string `json:"org_id"`
 	UserID    string `json:"user_id"`
 	Status    string `json:"status"`
+	Role      string `json:"role"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
 }
@@ -252,12 +278,42 @@ func (h *handlers) createOrg(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	org, err := h.svc.CreateOrg(r.Context(), body.Name, token)
+	org, err := h.svc.CreateOrg(r.Context(), body.Name, strings.TrimSpace(body.Slug), token)
 	if err != nil {
 		writeAppError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, organizationEnvelope{Organization: organizationJSONFrom(org)})
+}
+
+func (h *handlers) setOrgSlug(w http.ResponseWriter, r *http.Request) {
+	token, ok := h.requireBearer(w, r)
+	if !ok {
+		return
+	}
+	var body setOrgSlugBody
+	if !decodeJSONBody(w, r, &body) {
+		return
+	}
+	org, err := h.svc.SetOrgSlug(r.Context(), r.PathValue("org_id"), strings.TrimSpace(body.Slug), token)
+	if err != nil {
+		writeAppError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, organizationEnvelope{Organization: organizationJSONFrom(org)})
+}
+
+// resolveTenant is public: the web edge calls it before anyone signs in, to map
+// a tenant host label to an organization. It returns only the organization id,
+// name and current slug. An answer is safe to cache briefly.
+func (h *handlers) resolveTenant(w http.ResponseWriter, r *http.Request) {
+	tenant, err := h.svc.ResolveTenant(r.Context(), strings.TrimSpace(r.PathValue("slug")))
+	if err != nil {
+		writeAppError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "public, max-age=30")
+	writeJSON(w, http.StatusOK, tenantJSON{OrgID: tenant.OrgID, Slug: tenant.Slug, Name: tenant.Name, Retired: tenant.Retired})
 }
 
 func (h *handlers) listMembers(w http.ResponseWriter, r *http.Request) {
@@ -311,6 +367,23 @@ func (h *handlers) suspendMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, revokeResponse{Status: "suspended"})
+}
+
+func (h *handlers) setMemberRole(w http.ResponseWriter, r *http.Request) {
+	token, ok := h.requireBearer(w, r)
+	if !ok {
+		return
+	}
+	var body setMemberRoleBody
+	if !decodeJSONBody(w, r, &body) {
+		return
+	}
+	member, err := h.svc.SetMemberRole(r.Context(), r.PathValue("org_id"), r.PathValue("user_id"), strings.TrimSpace(body.Role), token)
+	if err != nil {
+		writeAppError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, membershipEnvelope{Membership: membershipJSONFrom(member)})
 }
 
 func (h *handlers) createInvite(w http.ResponseWriter, r *http.Request) {
@@ -396,6 +469,7 @@ func organizationJSONFrom(org domain.Organization) organizationJSON {
 	return organizationJSON{
 		ID:        org.ID,
 		Name:      org.Name,
+		Slug:      org.Slug,
 		CreatedAt: org.CreatedAt,
 		UpdatedAt: org.UpdatedAt,
 	}
@@ -409,16 +483,21 @@ func organizationsJSON(orgs []domain.Organization) []organizationJSON {
 	return out
 }
 
+func membershipJSONFrom(member domain.Membership) membershipJSON {
+	return membershipJSON{
+		OrgID:     member.OrgID,
+		UserID:    member.UserID,
+		Status:    member.Status,
+		Role:      member.Role,
+		CreatedAt: member.CreatedAt,
+		UpdatedAt: member.UpdatedAt,
+	}
+}
+
 func membershipsJSON(members []domain.Membership) []membershipJSON {
 	out := make([]membershipJSON, 0, len(members))
 	for _, member := range members {
-		out = append(out, membershipJSON{
-			OrgID:     member.OrgID,
-			UserID:    member.UserID,
-			Status:    member.Status,
-			CreatedAt: member.CreatedAt,
-			UpdatedAt: member.UpdatedAt,
-		})
+		out = append(out, membershipJSONFrom(member))
 	}
 	return out
 }

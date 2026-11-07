@@ -18,9 +18,19 @@ func (s *Service) VerifySignup(ctx context.Context, in domain.SignupVerification
 	return s.signup.VerifySignup(ctx, in)
 }
 
-// CreateOrg creates an organization owned by the caller.
-func (s *Service) CreateOrg(ctx context.Context, name, accessToken string) (domain.Organization, error) {
-	return s.orgs.CreateOrg(ctx, name, accessToken)
+// CreateOrg creates an organization owned by the caller. slug is optional.
+func (s *Service) CreateOrg(ctx context.Context, name, slug, accessToken string) (domain.Organization, error) {
+	return s.orgs.CreateOrg(ctx, name, slug, accessToken)
+}
+
+// SetOrgSlug renames an organization's slug. Orbit Auth requires an owner.
+func (s *Service) SetOrgSlug(ctx context.Context, orgID, slug, accessToken string) (domain.Organization, error) {
+	return s.orgs.SetOrgSlug(ctx, orgID, slug, accessToken)
+}
+
+// ResolveTenant resolves a tenant host label without authentication.
+func (s *Service) ResolveTenant(ctx context.Context, slug string) (domain.Tenant, error) {
+	return s.tenants.ResolveTenant(ctx, slug)
 }
 
 // ListMyOrgs lists the organizations the caller belongs to.
@@ -39,7 +49,7 @@ func (s *Service) AddMember(ctx context.Context, orgID, userID, accessToken stri
 }
 
 // RemoveMember removes a user from an organization. Orbit Auth refuses to
-// remove the last active member.
+// remove the last active member or the last active owner.
 func (s *Service) RemoveMember(ctx context.Context, orgID, userID, accessToken string) error {
 	return s.orgs.RemoveMember(ctx, orgID, userID, accessToken)
 }
@@ -47,6 +57,12 @@ func (s *Service) RemoveMember(ctx context.Context, orgID, userID, accessToken s
 // SuspendMember suspends a user's membership without deleting it.
 func (s *Service) SuspendMember(ctx context.Context, orgID, userID, accessToken string) error {
 	return s.orgs.SuspendMember(ctx, orgID, userID, accessToken)
+}
+
+// SetMemberRole changes a member's organization administration tier. Orbit
+// Auth decides who may grant which tier.
+func (s *Service) SetMemberRole(ctx context.Context, orgID, userID, role, accessToken string) (domain.Membership, error) {
+	return s.orgs.SetMemberRole(ctx, orgID, userID, role, accessToken)
 }
 
 // InviteMember creates or rotates an organization invitation.

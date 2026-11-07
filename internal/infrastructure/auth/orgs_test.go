@@ -16,6 +16,7 @@ import (
 
 type orgSignupStub struct {
 	authv1.UnimplementedOrgServiceServer
+	authv1.UnimplementedTenantServiceServer
 	authv1.UnimplementedSignupServiceServer
 	err           error
 	authorization string
@@ -48,7 +49,40 @@ func (s *orgSignupStub) ListMembers(ctx context.Context, in *authv1.ListMembersR
 	if err := s.record(ctx); err != nil {
 		return nil, err
 	}
-	return &authv1.ListMembersResponse{Members: []*authv1.Membership{{OrgId: in.GetOrgId(), UserId: "user-1", Status: "active"}}}, nil
+	return &authv1.ListMembersResponse{Members: []*authv1.Membership{{OrgId: in.GetOrgId(), UserId: "user-1", Status: "active", Role: "owner"}}}, nil
+}
+
+func (s *orgSignupStub) SetOrgSlug(ctx context.Context, in *authv1.SetOrgSlugRequest) (*authv1.SetOrgSlugResponse, error) {
+	if err := s.record(ctx); err != nil {
+		return nil, err
+	}
+	return &authv1.SetOrgSlugResponse{Organization: &authv1.Organization{Id: in.GetOrgId(), Name: "Acme", Slug: in.GetSlug()}}, nil
+}
+
+func (s *orgSignupStub) ResolveTenant(_ context.Context, in *authv1.ResolveTenantRequest) (*authv1.ResolveTenantResponse, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &authv1.ResolveTenantResponse{OrgId: "org-1", Name: "Acme", Slug: "acme", Retired: in.GetSlug() != "acme"}, nil
+}
+
+func (s *orgSignupStub) AddMember(ctx context.Context, _ *authv1.AddMemberRequest) (*authv1.AddMemberResponse, error) {
+	return &authv1.AddMemberResponse{}, s.record(ctx)
+}
+
+func (s *orgSignupStub) RemoveMember(ctx context.Context, _ *authv1.RemoveMemberRequest) (*authv1.RemoveMemberResponse, error) {
+	return &authv1.RemoveMemberResponse{}, s.record(ctx)
+}
+
+func (s *orgSignupStub) SuspendMember(ctx context.Context, _ *authv1.SuspendMemberRequest) (*authv1.SuspendMemberResponse, error) {
+	return &authv1.SuspendMemberResponse{}, s.record(ctx)
+}
+
+func (s *orgSignupStub) SetMemberRole(ctx context.Context, in *authv1.SetMemberRoleRequest) (*authv1.SetMemberRoleResponse, error) {
+	if err := s.record(ctx); err != nil {
+		return nil, err
+	}
+	return &authv1.SetMemberRoleResponse{Membership: &authv1.Membership{OrgId: in.GetOrgId(), UserId: in.GetUserId(), Status: "active", Role: in.GetRole()}}, nil
 }
 
 func (s *orgSignupStub) InviteMember(ctx context.Context, in *authv1.InviteMemberRequest) (*authv1.InviteMemberResponse, error) {
@@ -106,6 +140,7 @@ func dialOrgStub(t *testing.T, err error) (*Client, *orgSignupStub) {
 	stub := &orgSignupStub{err: err}
 	gs := grpc.NewServer()
 	authv1.RegisterOrgServiceServer(gs, stub)
+	authv1.RegisterTenantServiceServer(gs, stub)
 	authv1.RegisterSignupServiceServer(gs, stub)
 	go func() { _ = gs.Serve(listener) }()
 	t.Cleanup(gs.Stop)
@@ -122,7 +157,7 @@ func TestOrgAndSignupCallsForwardTheBearerAndMapTheirTypes(t *testing.T) {
 	client, stub := dialOrgStub(t, nil)
 	ctx := context.Background()
 
-	org, err := client.CreateOrg(ctx, "Acme", "token-1")
+	org, err := client.CreateOrg(ctx, "Acme", "", "token-1")
 	if err != nil || org.ID != "org-Acme" || org.Name != "Acme" {
 		t.Fatalf("CreateOrg = %+v, %v", org, err)
 	}
@@ -136,6 +171,27 @@ func TestOrgAndSignupCallsForwardTheBearerAndMapTheirTypes(t *testing.T) {
 	members, err := client.ListMembers(ctx, "org-1", "token-1")
 	if err != nil || len(members) != 1 || members[0].UserID != "user-1" {
 		t.Fatalf("ListMembers = %+v, %v", members, err)
+	}
+	if err := client.AddMember(ctx, "org-1", "user-2", "token-1"); err != nil {
+		t.Fatalf("AddMember = %v (a successful write must not be an error)", err)
+	}
+	if err := client.RemoveMember(ctx, "org-1", "user-2", "token-1"); err != nil {
+		t.Fatalf("RemoveMember = %v", err)
+	}
+	if err := client.SuspendMember(ctx, "org-1", "user-2", "token-1"); err != nil {
+		t.Fatalf("SuspendMember = %v", err)
+	}
+	changed, err := client.SetMemberRole(ctx, "org-1", "user-2", "admin", "token-1")
+	if err != nil || changed.Role != "admin" || changed.UserID != "user-2" {
+		t.Fatalf("SetMemberRole = %+v, %v", changed, err)
+	}
+	renamed, err := client.SetOrgSlug(ctx, "org-1", "new-name", "token-1")
+	if err != nil || renamed.Slug != "new-name" {
+		t.Fatalf("SetOrgSlug = %+v, %v", renamed, err)
+	}
+	tenant, err := client.ResolveTenant(ctx, "old-name")
+	if err != nil || tenant.OrgID != "org-1" || tenant.Slug != "acme" || !tenant.Retired {
+		t.Fatalf("ResolveTenant = %+v, %v", tenant, err)
 	}
 	invite, err := client.InviteMember(ctx, "org-1", "person@example.com", "token-1")
 	if err != nil || invite.Email != "person@example.com" {
@@ -176,8 +232,9 @@ func TestOrgStatusMapping(t *testing.T) {
 		{"unauthenticated", status.Error(codes.Unauthenticated, "bad"), domain.KindUnauthenticated},
 		{"not found", status.Error(codes.NotFound, "missing"), domain.KindNotFound},
 		{"failed precondition", status.Error(codes.FailedPrecondition, "last owner"), domain.KindConflict},
+		{"already exists", status.Error(codes.AlreadyExists, "organization slug is taken"), domain.KindConflict},
 		{"resource exhausted", status.Error(codes.ResourceExhausted, "slow down"), domain.KindResourceExhausted},
-		{"permission denied is a gateway failure", status.Error(codes.PermissionDenied, "no"), domain.KindBadGateway},
+		{"permission denied is forbidden", status.Error(codes.PermissionDenied, "no"), domain.KindPermissionDenied},
 		{"internal hides the detail", status.Error(codes.Internal, "pg: reset"), domain.KindBadGateway},
 	}
 	for _, tc := range tests {
@@ -208,5 +265,29 @@ func TestSignupFailedPreconditionBecomesNotFound(t *testing.T) {
 	failure, ok = domain.AsError(err)
 	if !ok || failure.Kind != domain.KindNotFound {
 		t.Fatalf("VerifySignup err = %v, want KindNotFound", err)
+	}
+}
+
+func TestResolveTenantMapsNotFoundAndHidesOtherFailures(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		want domain.Kind
+	}{
+		{"not found", status.Error(codes.NotFound, "tenant not found"), domain.KindNotFound},
+		{"internal", status.Error(codes.Internal, "pg: connection reset"), domain.KindBadGateway},
+		{"permission denied", status.Error(codes.PermissionDenied, "detail"), domain.KindBadGateway},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client, _ := dialOrgStub(t, tc.err)
+			_, err := client.ResolveTenant(context.Background(), "acme")
+			failure, ok := domain.AsError(err)
+			if !ok || failure.Kind != tc.want {
+				t.Fatalf("err = %v, want kind %v", err, tc.want)
+			}
+			if tc.want == domain.KindBadGateway && failure.Message != "upstream error" {
+				t.Fatalf("message = %q, want the generic upstream error", failure.Message)
+			}
+		})
 	}
 }

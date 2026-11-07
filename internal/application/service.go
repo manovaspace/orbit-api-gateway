@@ -16,6 +16,7 @@ type Deps struct {
 	Auth       domain.AuthService
 	Orgs       domain.OrgService
 	Signup     domain.SignupService
+	Tenants    domain.TenantService
 	Flags      domain.FlagSource
 	Limiter    domain.Limiter
 	Clock      domain.Clock
@@ -33,6 +34,7 @@ type Service struct {
 	auth       domain.AuthService
 	orgs       domain.OrgService
 	signup     domain.SignupService
+	tenants    domain.TenantService
 	flags      domain.FlagSource
 	limiter    domain.Limiter
 	clock      domain.Clock
@@ -54,6 +56,7 @@ func NewService(deps Deps) *Service {
 		auth:       deps.Auth,
 		orgs:       deps.Orgs,
 		signup:     deps.Signup,
+		tenants:    deps.Tenants,
 		flags:      deps.Flags,
 		limiter:    deps.Limiter,
 		clock:      deps.Clock,
@@ -72,6 +75,9 @@ func (s *Service) HasAuth() bool { return s.auth != nil }
 
 // HasOrgs reports whether the upstream organization port is wired.
 func (s *Service) HasOrgs() bool { return s.orgs != nil }
+
+// HasTenants reports whether the upstream tenant-resolution port is wired.
+func (s *Service) HasTenants() bool { return s.tenants != nil }
 
 // HasSignup reports whether the upstream sign-up port is wired.
 func (s *Service) HasSignup() bool { return s.signup != nil }

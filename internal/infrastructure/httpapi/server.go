@@ -81,11 +81,18 @@ func New(svc *application.Service, opts Options) *Server {
 		mux.HandleFunc("POST /api/v1/orgs/{org_id}/members", h.wrapOrg(routeOrgMembers, h.addMember))
 		mux.HandleFunc("DELETE /api/v1/orgs/{org_id}/members/{user_id}", h.wrapOrg(routeOrgMembers, h.removeMember))
 		mux.HandleFunc("POST /api/v1/orgs/{org_id}/members/{user_id}/suspend", h.wrapOrg(routeOrgMembers, h.suspendMember))
+		mux.HandleFunc("PUT /api/v1/orgs/{org_id}/members/{user_id}/role", h.wrapOrg(routeOrgMemberRole, h.setMemberRole))
+		mux.HandleFunc("PUT /api/v1/orgs/{org_id}/slug", h.wrapOrg(routeOrgSlug, h.setOrgSlug))
 		mux.HandleFunc("POST /api/v1/orgs/{org_id}/invites", h.wrapOrg(routeOrgInvites, h.createInvite))
 		mux.HandleFunc("GET /api/v1/orgs/{org_id}/invites", h.wrapOrg(routeOrgInvites, h.listInvites))
 		mux.HandleFunc("DELETE /api/v1/orgs/{org_id}/invites/{invite_id}", h.wrapOrg(routeOrgInviteRev, h.revokeInvite))
 		mux.HandleFunc("POST /api/v1/invites/accept", h.wrapIP(routeInviteAccept, domain.InviteAcceptIPLimit, h.acceptInvite))
 		mux.HandleFunc("POST /api/v1/session/org", h.selectOrg)
+	}
+
+	// The tenant lookup the web edge makes before sign-in. Public and read-only.
+	if svc.HasTenants() {
+		mux.HandleFunc("GET "+routeTenantResolve, h.wrapIP(routeTenantResolve, domain.TenantResolveIPLimit, h.resolveTenant))
 	}
 
 	// Canonical System & Infrastructure Plane (Platform Ownership).

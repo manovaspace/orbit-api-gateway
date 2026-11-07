@@ -65,6 +65,7 @@ func main() {
 		Auth:       authClient,
 		Orgs:       authClient,
 		Signup:     authClient,
+		Tenants:    authClient,
 		Flags:      authClient,
 		Limiter:    limiter,
 		Clock:      clock.New(),

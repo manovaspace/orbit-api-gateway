@@ -33,6 +33,12 @@ const (
 	// invitation.
 	SignupIPLimit       = 5
 	InviteAcceptIPLimit = 5
+	// TenantResolveIPLimit is the per-IP budget for the public tenant lookup the
+	// edge makes before anyone signs in. It is generous because the caller is
+	// usually the web edge, whose egress addresses are few and shared by every
+	// tenant; the edge caches answers for 30 seconds, so the real rate is far
+	// below it. It exists to stop scraping, not to meter the edge.
+	TenantResolveIPLimit = 600
 	// OrgRouteLimit is the per-organization budget for organization-scoped
 	// routes.
 	OrgRouteLimit = 60
