@@ -23,6 +23,7 @@ import (
 type Client struct {
 	api    authv1.AuthServiceClient
 	orgs   authv1.OrgServiceClient
+	tenant authv1.TenantServiceClient
 	signup authv1.SignupServiceClient
 	conn   *grpc.ClientConn
 
@@ -35,6 +36,7 @@ type Client struct {
 var (
 	_ domain.AuthService   = (*Client)(nil)
 	_ domain.OrgService    = (*Client)(nil)
+	_ domain.TenantService = (*Client)(nil)
 	_ domain.SignupService = (*Client)(nil)
 	_ domain.FlagSource    = (*Client)(nil)
 )
@@ -50,6 +52,7 @@ func NewClient(addr string, opts ...grpc.DialOption) (*Client, error) {
 	return &Client{
 		api:        authv1.NewAuthServiceClient(conn),
 		orgs:       authv1.NewOrgServiceClient(conn),
+		tenant:     authv1.NewTenantServiceClient(conn),
 		signup:     authv1.NewSignupServiceClient(conn),
 		conn:       conn,
 		httpClient: &http.Client{Timeout: 5 * time.Second},
@@ -145,12 +148,35 @@ func (c *Client) VerifySignup(ctx context.Context, in domain.SignupVerification)
 }
 
 // CreateOrg creates an organization owned by the caller.
-func (c *Client) CreateOrg(ctx context.Context, name, accessToken string) (domain.Organization, error) {
-	resp, err := c.orgs.CreateOrg(callerContext(ctx, accessToken), &authv1.CreateOrgRequest{Name: name})
+func (c *Client) CreateOrg(ctx context.Context, name, slug, accessToken string) (domain.Organization, error) {
+	resp, err := c.orgs.CreateOrg(callerContext(ctx, accessToken), &authv1.CreateOrgRequest{Name: name, Slug: slug})
 	if err != nil {
 		return domain.Organization{}, orgUpstreamError(err)
 	}
 	return organization(resp.GetOrganization()), nil
+}
+
+// SetOrgSlug renames an organization's slug.
+func (c *Client) SetOrgSlug(ctx context.Context, orgID, slug, accessToken string) (domain.Organization, error) {
+	resp, err := c.orgs.SetOrgSlug(callerContext(ctx, accessToken), &authv1.SetOrgSlugRequest{OrgId: orgID, Slug: slug})
+	if err != nil {
+		return domain.Organization{}, orgUpstreamError(err)
+	}
+	return organization(resp.GetOrganization()), nil
+}
+
+// ResolveTenant resolves a tenant host label through the unauthenticated
+// TenantService. An unknown slug is a not-found error; every other failure is
+// the generic upstream error so no detail reaches the edge's callers.
+func (c *Client) ResolveTenant(ctx context.Context, slug string) (domain.Tenant, error) {
+	resp, err := c.tenant.ResolveTenant(ctx, &authv1.ResolveTenantRequest{Slug: slug})
+	if err != nil {
+		if st, ok := status.FromError(err); ok && st.Code() == codes.NotFound {
+			return domain.Tenant{}, domain.NewError(domain.KindNotFound, "tenant not found")
+		}
+		return domain.Tenant{}, domain.NewError(domain.KindBadGateway, "upstream error")
+	}
+	return domain.Tenant{OrgID: resp.GetOrgId(), Name: resp.GetName(), Slug: resp.GetSlug(), Retired: resp.GetRetired()}, nil
 }
 
 // ListMyOrgs lists the organizations the caller belongs to.
@@ -292,6 +318,7 @@ func organization(org *authv1.Organization) domain.Organization {
 	return domain.Organization{
 		ID:        org.GetId(),
 		Name:      org.GetName(),
+		Slug:      org.GetSlug(),
 		CreatedAt: org.GetCreatedAt(),
 		UpdatedAt: org.GetUpdatedAt(),
 	}
@@ -386,7 +413,7 @@ func orgUpstreamError(err error) error {
 			return domain.NewError(domain.KindPermissionDenied, st.Message())
 		case codes.NotFound:
 			return domain.NewError(domain.KindNotFound, st.Message())
-		case codes.FailedPrecondition:
+		case codes.FailedPrecondition, codes.AlreadyExists:
 			return domain.NewError(domain.KindConflict, st.Message())
 		case codes.ResourceExhausted:
 			return domain.NewError(domain.KindResourceExhausted, st.Message())

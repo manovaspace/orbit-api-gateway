@@ -18,9 +18,19 @@ func (s *Service) VerifySignup(ctx context.Context, in domain.SignupVerification
 	return s.signup.VerifySignup(ctx, in)
 }
 
-// CreateOrg creates an organization owned by the caller.
-func (s *Service) CreateOrg(ctx context.Context, name, accessToken string) (domain.Organization, error) {
-	return s.orgs.CreateOrg(ctx, name, accessToken)
+// CreateOrg creates an organization owned by the caller. slug is optional.
+func (s *Service) CreateOrg(ctx context.Context, name, slug, accessToken string) (domain.Organization, error) {
+	return s.orgs.CreateOrg(ctx, name, slug, accessToken)
+}
+
+// SetOrgSlug renames an organization's slug. Orbit Auth requires an owner.
+func (s *Service) SetOrgSlug(ctx context.Context, orgID, slug, accessToken string) (domain.Organization, error) {
+	return s.orgs.SetOrgSlug(ctx, orgID, slug, accessToken)
+}
+
+// ResolveTenant resolves a tenant host label without authentication.
+func (s *Service) ResolveTenant(ctx context.Context, slug string) (domain.Tenant, error) {
+	return s.tenants.ResolveTenant(ctx, slug)
 }
 
 // ListMyOrgs lists the organizations the caller belongs to.

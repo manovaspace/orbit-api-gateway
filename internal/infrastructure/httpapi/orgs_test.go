@@ -29,6 +29,7 @@ const testAccessToken = "access-token"
 // unless err is set, and records what the adapter forwarded.
 type orgSignupStub struct {
 	authv1.UnimplementedOrgServiceServer
+	authv1.UnimplementedTenantServiceServer
 	authv1.UnimplementedSignupServiceServer
 
 	mu  sync.Mutex
@@ -44,6 +45,8 @@ type orgSignupStub struct {
 	name          string
 	refreshToken  string
 	role          string
+	slug          string
+	tenantCalls   int
 }
 
 func (s *orgSignupStub) record(ctx context.Context) error {
@@ -86,6 +89,7 @@ func (s *orgSignupStub) CreateOrg(ctx context.Context, in *authv1.CreateOrgReque
 	return &authv1.CreateOrgResponse{Organization: &authv1.Organization{
 		Id:        "org-created",
 		Name:      in.GetName(),
+		Slug:      "created-slug",
 		CreatedAt: "2026-11-02T10:00:00Z",
 		UpdatedAt: "2026-11-02T10:00:00Z",
 	}}, nil
@@ -98,6 +102,7 @@ func (s *orgSignupStub) ListMyOrgs(ctx context.Context, _ *authv1.ListMyOrgsRequ
 	return &authv1.ListMyOrgsResponse{Organizations: []*authv1.Organization{{
 		Id:        "org-1",
 		Name:      "Acme",
+		Slug:      "acme",
 		CreatedAt: "2026-11-02T10:00:00Z",
 		UpdatedAt: "2026-11-02T10:00:00Z",
 	}}}, nil
@@ -118,6 +123,38 @@ func (s *orgSignupStub) ListMembers(ctx context.Context, in *authv1.ListMembersR
 		CreatedAt: "2026-11-02T10:00:00Z",
 		UpdatedAt: "2026-11-02T10:00:00Z",
 	}}}, nil
+}
+
+func (s *orgSignupStub) SetOrgSlug(ctx context.Context, in *authv1.SetOrgSlugRequest) (*authv1.SetOrgSlugResponse, error) {
+	s.mu.Lock()
+	s.orgID = in.GetOrgId()
+	s.slug = in.GetSlug()
+	s.mu.Unlock()
+	if err := s.record(ctx); err != nil {
+		return nil, err
+	}
+	return &authv1.SetOrgSlugResponse{Organization: &authv1.Organization{
+		Id: in.GetOrgId(), Name: "Acme", Slug: in.GetSlug(),
+		CreatedAt: "2026-11-02T10:00:00Z", UpdatedAt: "2026-11-02T10:00:00Z",
+	}}, nil
+}
+
+// ResolveTenant is the unauthenticated lookup: it records no bearer token and
+// does not count as an organization call.
+func (s *orgSignupStub) ResolveTenant(ctx context.Context, in *authv1.ResolveTenantRequest) (*authv1.ResolveTenantResponse, error) {
+	s.mu.Lock()
+	s.slug = in.GetSlug()
+	s.tenantCalls++
+	s.authorization = firstMetadata(ctx, "authorization")
+	err := s.err
+	s.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	if in.GetSlug() == "unknown" {
+		return nil, status.Error(codes.NotFound, "tenant not found")
+	}
+	return &authv1.ResolveTenantResponse{OrgId: "org-1", Name: "Acme", Slug: "acme", Retired: in.GetSlug() != "acme"}, nil
 }
 
 func (s *orgSignupStub) AddMember(ctx context.Context, in *authv1.AddMemberRequest) (*authv1.AddMemberResponse, error) {
@@ -283,6 +320,7 @@ func newOrgSignupEnv(t *testing.T, stub *orgSignupStub, limiter domain.Limiter) 
 	}
 	gs := grpc.NewServer()
 	authv1.RegisterOrgServiceServer(gs, stub)
+	authv1.RegisterTenantServiceServer(gs, stub)
 	authv1.RegisterSignupServiceServer(gs, stub)
 	go func() { _ = gs.Serve(listener) }()
 	t.Cleanup(gs.Stop)
@@ -295,6 +333,7 @@ func newOrgSignupEnv(t *testing.T, stub *orgSignupStub, limiter domain.Limiter) 
 
 	svc := application.NewService(application.Deps{
 		Orgs:    client,
+		Tenants: client,
 		Signup:  client,
 		Limiter: limiter,
 		Assets:  assets.New("openapi"),
@@ -356,12 +395,12 @@ func TestOrgRoutesForwardTheBearerTokenAndReturnTheirShapes(t *testing.T) {
 		{
 			name: "list my orgs", method: http.MethodGet, path: routeOrgList,
 			wantStatus: http.StatusOK,
-			wantBody:   `{"organizations":[{"id":"org-1","name":"Acme","created_at":"2026-11-02T10:00:00Z","updated_at":"2026-11-02T10:00:00Z"}]}` + "\n",
+			wantBody:   `{"organizations":[{"id":"org-1","name":"Acme","slug":"acme","created_at":"2026-11-02T10:00:00Z","updated_at":"2026-11-02T10:00:00Z"}]}` + "\n",
 		},
 		{
 			name: "create org", method: http.MethodPost, path: routeOrgCreate, body: `{"name":"Created"}`,
 			wantStatus: http.StatusOK,
-			wantBody:   `{"organization":{"id":"org-created","name":"Created","created_at":"2026-11-02T10:00:00Z","updated_at":"2026-11-02T10:00:00Z"}}` + "\n",
+			wantBody:   `{"organization":{"id":"org-created","name":"Created","slug":"created-slug","created_at":"2026-11-02T10:00:00Z","updated_at":"2026-11-02T10:00:00Z"}}` + "\n",
 		},
 		{
 			name: "list members", method: http.MethodGet, path: "/api/v1/orgs/org-1/members",
@@ -382,6 +421,11 @@ func TestOrgRoutesForwardTheBearerTokenAndReturnTheirShapes(t *testing.T) {
 			name: "suspend member", method: http.MethodPost, path: "/api/v1/orgs/org-1/members/user-2/suspend",
 			wantStatus: http.StatusOK,
 			wantBody:   `{"status":"suspended"}` + "\n",
+		},
+		{
+			name: "set org slug", method: http.MethodPut, path: "/api/v1/orgs/org-1/slug", body: `{"slug":" new-name "}`,
+			wantStatus: http.StatusOK,
+			wantBody:   `{"organization":{"id":"org-1","name":"Acme","slug":"new-name","created_at":"2026-11-02T10:00:00Z","updated_at":"2026-11-02T10:00:00Z"}}` + "\n",
 		},
 		{
 			name: "set member role", method: http.MethodPut, path: "/api/v1/orgs/org-1/members/user-2/role", body: `{"role":" admin "}`,
@@ -456,6 +500,7 @@ func TestOrgRoutesRequireABearerToken(t *testing.T) {
 		{"remove member", http.MethodDelete, "/api/v1/orgs/org-1/members/user-2", ""},
 		{"suspend member", http.MethodPost, "/api/v1/orgs/org-1/members/user-2/suspend", ""},
 		{"set member role", http.MethodPut, "/api/v1/orgs/org-1/members/user-2/role", `{"role":"admin"}`},
+		{"set org slug", http.MethodPut, "/api/v1/orgs/org-1/slug", `{"slug":"new-name"}`},
 		{"create invite", http.MethodPost, "/api/v1/orgs/org-1/invites", `{"email":"p@example.com"}`},
 		{"list invites", http.MethodGet, "/api/v1/orgs/org-1/invites", ""},
 		{"revoke invite", http.MethodDelete, "/api/v1/orgs/org-1/invites/invite-1", ""},
@@ -755,5 +800,83 @@ func TestSetMemberRoleForwardsTheTrimmedRole(t *testing.T) {
 	defer stub.mu.Unlock()
 	if stub.role != "owner" || stub.orgID != "org-1" {
 		t.Fatalf("forwarded role %q org %q, want owner org-1", stub.role, stub.orgID)
+	}
+}
+
+func TestOrgSlugWriteSurfacesOrbitAuthAnswers(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		err        error
+		wantStatus int
+	}{
+		{"not an owner", status.Error(codes.PermissionDenied, "organization administration required"), http.StatusForbidden},
+		{"slug taken", status.Error(codes.AlreadyExists, "organization slug is taken"), http.StatusConflict},
+		{"invalid slug", status.Error(codes.InvalidArgument, "invalid organization slug"), http.StatusBadRequest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			base := newOrgSignupEnv(t, &orgSignupStub{err: tc.err}, nil)
+			headers := bearer()
+			headers["Content-Type"] = "application/json"
+			got := send(t, base, http.MethodPut, "/api/v1/orgs/org-1/slug", `{"slug":"x"}`, headers)
+			if got.Status != tc.wantStatus {
+				t.Fatalf("status = %d, want %d (body %q)", got.Status, tc.wantStatus, got.Body)
+			}
+		})
+	}
+}
+
+func TestCreateOrgForwardsTheOptionalSlug(t *testing.T) {
+	stub := &orgSignupStub{}
+	base := newOrgSignupEnv(t, stub, nil)
+	headers := bearer()
+	headers["Content-Type"] = "application/json"
+	if got := send(t, base, http.MethodPost, routeOrgCreate, `{"name":"Created","slug":" Created-Slug "}`, headers); got.Status != http.StatusOK {
+		t.Fatalf("status = %d, body %q", got.Status, got.Body)
+	}
+}
+
+// TestTenantResolveIsPublicAndReturnsOnlyThePublicFields proves the lookup the
+// web edge makes before sign-in needs no token, forwards none, and answers only
+// the organization id, name and current slug.
+func TestTenantResolveIsPublicAndReturnsOnlyThePublicFields(t *testing.T) {
+	stub := &orgSignupStub{}
+	base := newOrgSignupEnv(t, stub, nil)
+
+	got := send(t, base, http.MethodGet, "/api/v1/public/tenants/acme", "", nil)
+	if got.Status != http.StatusOK {
+		t.Fatalf("status = %d, body %q", got.Status, got.Body)
+	}
+	if want := `{"org_id":"org-1","slug":"acme","name":"Acme","retired":false}` + "\n"; got.Body != want {
+		t.Fatalf("body = %q, want %q", got.Body, want)
+	}
+	if got.CacheControl != "public, max-age=30" {
+		t.Fatalf("cache-control = %q, want a short public cache", got.CacheControl)
+	}
+
+	retired := send(t, base, http.MethodGet, "/api/v1/public/tenants/old-name", "", nil)
+	if retired.Status != http.StatusOK || !strings.Contains(retired.Body, `"retired":true`) || !strings.Contains(retired.Body, `"slug":"acme"`) {
+		t.Fatalf("retired = %d %q, want the current slug and retired true", retired.Status, retired.Body)
+	}
+
+	unknown := send(t, base, http.MethodGet, "/api/v1/public/tenants/unknown", "", nil)
+	if unknown.Status != http.StatusNotFound || unknown.Body != `{"error":"tenant not found"}`+"\n" {
+		t.Fatalf("unknown = %d %q, want 404 tenant not found", unknown.Status, unknown.Body)
+	}
+
+	stub.mu.Lock()
+	defer stub.mu.Unlock()
+	if stub.authorization != "" {
+		t.Fatalf("the public lookup forwarded %q to Orbit Auth", stub.authorization)
+	}
+	if stub.orgCalls != 0 || stub.tenantCalls != 3 {
+		t.Fatalf("orgCalls = %d, tenantCalls = %d; want 0 and 3", stub.orgCalls, stub.tenantCalls)
+	}
+}
+
+func TestTenantResolveHidesUpstreamFailures(t *testing.T) {
+	base := newOrgSignupEnv(t, &orgSignupStub{err: status.Error(codes.Internal, "pg: connection reset")}, nil)
+	got := send(t, base, http.MethodGet, "/api/v1/public/tenants/acme", "", nil)
+	if got.Status != http.StatusBadGateway || got.Body != `{"error":"upstream error"}`+"\n" {
+		t.Fatalf("got %d %q, want the generic 502", got.Status, got.Body)
 	}
 }

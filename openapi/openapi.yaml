@@ -609,6 +609,12 @@ paths:
               properties:
                 name:
                   type: string
+                slug:
+                  type: string
+                  description: >
+                    Optional tenant host label. When omitted Orbit Auth derives
+                    one from the name, or from the organization id when the name
+                    has no usable ASCII.
       responses:
         "200":
           description: Organization created
@@ -617,7 +623,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/OrganizationEnvelope"
         "400":
-          description: Invalid organization name
+          description: Invalid organization name or slug
           content:
             application/json:
               schema:
@@ -972,6 +978,128 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
           description: Refused because this is the last active owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/orgs/{org_id}/slug:
+    put:
+      operationId: orgSlugSet
+      summary: Change an organization's slug
+      description: >
+        The slug is the label of the organization's tenant host. Only an owner
+        can change it. The old slug stays reserved for the organization and
+        keeps resolving to it, so a rename never frees an address for someone
+        else.
+      parameters:
+        - name: org_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slug]
+              properties:
+                slug:
+                  type: string
+      responses:
+        "200":
+          description: Slug changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationEnvelope"
+        "400":
+          description: Invalid or reserved slug
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Caller is not an organization owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Organization not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: The slug is held by another organization or was held by one
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/public/tenants/{slug}:
+    get:
+      operationId: tenantResolve
+      summary: Resolve a tenant host label to its organization
+      description: >
+        Public and read-only: the web edge calls it before anyone signs in. It
+        returns only the organization id, name and current slug, never members.
+        A retired slug resolves to the same organization and reports its current
+        slug with `retired: true`, so the caller can redirect. An unknown,
+        invalid or reserved slug is 404. Answers are cacheable for 30 seconds.
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Tenant found
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: public, max-age=30
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+        "404":
+          description: No organization holds or has held this slug
           content:
             application/json:
               schema:
@@ -1365,6 +1493,7 @@ components:
       required:
         - id
         - name
+        - slug
         - created_at
         - updated_at
       properties:
@@ -1373,6 +1502,11 @@ components:
           format: uuid
         name:
           type: string
+        slug:
+          type: string
+          description: >
+            Current tenant host label: 3 to 30 lowercase letters, digits and
+            single hyphens, unique across organizations and across time.
         created_at:
           type: string
           format: date-time
@@ -1424,6 +1558,25 @@ components:
         updated_at:
           type: string
           format: date-time
+    Tenant:
+      type: object
+      required:
+        - org_id
+        - slug
+        - name
+        - retired
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+          description: The organization's current slug
+        name:
+          type: string
+        retired:
+          type: boolean
+          description: True when the requested slug is no longer the current one
     MembershipEnvelope:
       type: object
       required:

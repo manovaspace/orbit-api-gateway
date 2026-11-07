@@ -34,12 +34,14 @@ HTTP runs on **Fiber v3** fronting the same `net/http` handlers as before, so ro
 | `POST` | `/api/v1/auth/signup` | Proxies to `orbit-auth` `SignupService.RegisterWithEmail`. Unauthenticated; same 202 for new and existing addresses; disabled sign-up answers 404 |
 | `POST` | `/api/v1/auth/signup/verify` | Proxies to `orbit-auth` `SignupService.VerifySignup`; returns a token pair |
 | `GET` | `/api/v1/orgs` | Proxies to `orbit-auth` `OrgService.ListMyOrgs` (bearer access token) |
-| `POST` | `/api/v1/orgs` | Proxies to `orbit-auth` `OrgService.CreateOrg` (`name`) |
+| `POST` | `/api/v1/orgs` | Proxies to `orbit-auth` `OrgService.CreateOrg` (`name`, optional `slug`) |
 | `GET` | `/api/v1/orgs/{org_id}/members` | Proxies to `orbit-auth` `OrgService.ListMembers` (non-member is 404) |
 | `POST` | `/api/v1/orgs/{org_id}/members` | Proxies to `orbit-auth` `OrgService.AddMember` (`user_id`); owner or admin only, else 403 |
 | `DELETE` | `/api/v1/orgs/{org_id}/members/{user_id}` | Proxies to `orbit-auth` `OrgService.RemoveMember`; owner, an admin removing a plain member, or the member themselves; last active owner is 409 |
 | `POST` | `/api/v1/orgs/{org_id}/members/{user_id}/suspend` | Proxies to `orbit-auth` `OrgService.SuspendMember`; owner or an admin suspending a plain member |
 | `PUT` | `/api/v1/orgs/{org_id}/members/{user_id}/role` | Proxies to `orbit-auth` `OrgService.SetMemberRole` (`role`: `owner`, `admin`, `member`); only an owner grants `owner` or `admin` |
+| `PUT` | `/api/v1/orgs/{org_id}/slug` | Proxies to `orbit-auth` `OrgService.SetOrgSlug` (`slug`); owner only. The old slug stays reserved and resolves |
+| `GET` | `/api/v1/public/tenants/{slug}` | **Public.** Proxies to `orbit-auth` `TenantService.ResolveTenant`; returns `org_id`, `slug`, `name`, `retired` only; cacheable 30 s; 404 for an unknown slug |
 | `POST` | `/api/v1/orgs/{org_id}/invites` | Proxies to `orbit-auth` `OrgService.InviteMember` (`email`); owner or admin only, else 403 |
 | `GET` | `/api/v1/orgs/{org_id}/invites` | Proxies to `orbit-auth` `OrgService.ListInvites` |
 | `DELETE` | `/api/v1/orgs/{org_id}/invites/{invite_id}` | Proxies to `orbit-auth` `OrgService.RevokeInvite` |

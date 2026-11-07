@@ -33,7 +33,7 @@ Three paths are deliberately absent: no Postgres (so no migrations, no sqlc and 
 
 Public HTTP is **OpenAPI-first**. Commit the OpenAPI artifact under `openapi/`; serve it at `/api/v1/openapi/gateway.yaml`. Scalar handbook/infra embedding is **planned** — do not hand-maintain endpoint tables.
 
-The spec includes stable `operationId` values for every operation (`authLogin`, `authOtpRequest`, `authOtpVerify`, `authTokenRefresh`, `authSignup`, `authSignupVerify`, `orgList`, `orgCreate`, `orgMembersList`, `orgMemberAdd`, `orgMemberRemove`, `orgMemberSuspend`, `orgMemberRoleSet`, `orgInviteCreate`, `orgInviteList`, `orgInviteRevoke`, `inviteAccept`, `sessionSelectOrg`) and shared schemas (`TokenPair`, `OtpRequestResponse`, `ErrorEnvelope`). **Do not rename operationIds** without coordinating `@orbit/contracts` codegen in orbit-frontend (vendor + regenerate).
+The spec includes stable `operationId` values for every operation (`authLogin`, `authOtpRequest`, `authOtpVerify`, `authTokenRefresh`, `authSignup`, `authSignupVerify`, `orgList`, `orgCreate`, `orgMembersList`, `orgMemberAdd`, `orgMemberRemove`, `orgMemberSuspend`, `orgMemberRoleSet`, `orgSlugSet`, `tenantResolve`, `orgInviteCreate`, `orgInviteList`, `orgInviteRevoke`, `inviteAccept`, `sessionSelectOrg`) and shared schemas (`TokenPair`, `OtpRequestResponse`, `ErrorEnvelope`). **Do not rename operationIds** without coordinating `@orbit/contracts` codegen in orbit-frontend (vendor + regenerate).
 
 `internal/infrastructure/httpapi/openapi_test.go` parses the YAML and asserts path/method/`operationId` parity with `platformOpenAPIRoutes` (keep that table aligned with `New` auth registrations).
 
@@ -56,12 +56,14 @@ Agent routing: `openapi` / `orbit-api-gateway` in `handbook/cursor/agent-routing
 | `POST` | `/api/v1/auth/signup` | Upstream `orbit-auth` SignupService RegisterWithEmail. Unauthenticated; same 202 for new and existing addresses; disabled sign-up answers 404 |
 | `POST` | `/api/v1/auth/signup/verify` | Upstream `orbit-auth` SignupService VerifySignup; returns `TokenPair` |
 | `GET` | `/api/v1/orgs` | Upstream `orbit-auth` OrgService ListMyOrgs (bearer access token) |
-| `POST` | `/api/v1/orgs` | Upstream `orbit-auth` OrgService CreateOrg (`name`; bearer access token) |
+| `POST` | `/api/v1/orgs` | Upstream `orbit-auth` OrgService CreateOrg (`name`, optional `slug`; bearer access token) |
 | `GET` | `/api/v1/orgs/{org_id}/members` | Upstream `orbit-auth` OrgService ListMembers (bearer; non-member is 404) |
 | `POST` | `/api/v1/orgs/{org_id}/members` | Upstream `orbit-auth` `OrgService.AddMember` (`user_id`); owner or admin only, else 403 |
 | `DELETE` | `/api/v1/orgs/{org_id}/members/{user_id}` | Upstream `orbit-auth` `OrgService.RemoveMember`; owner, an admin removing a plain member, or the member themselves; last active owner is 409 |
 | `POST` | `/api/v1/orgs/{org_id}/members/{user_id}/suspend` | Upstream `orbit-auth` `OrgService.SuspendMember`; owner or an admin suspending a plain member |
 | `PUT` | `/api/v1/orgs/{org_id}/members/{user_id}/role` | Upstream `orbit-auth` `OrgService.SetMemberRole` (`role`: `owner`, `admin`, `member`); only an owner grants `owner` or `admin` |
+| `PUT` | `/api/v1/orgs/{org_id}/slug` | Upstream `orbit-auth` `OrgService.SetOrgSlug` (`slug`); owner only. The old slug stays reserved and resolves |
+| `GET` | `/api/v1/public/tenants/{slug}` | **Public.** Upstream `orbit-auth` `TenantService.ResolveTenant`; returns `org_id`, `slug`, `name`, `retired` only; cacheable 30 s; 404 for an unknown slug |
 | `POST` | `/api/v1/orgs/{org_id}/invites` | Upstream `orbit-auth` OrgService InviteMember (`email`); owner or admin only, else 403 |
 | `GET` | `/api/v1/orgs/{org_id}/invites` | Upstream `orbit-auth` OrgService ListInvites |
 | `DELETE` | `/api/v1/orgs/{org_id}/invites/{invite_id}` | Upstream `orbit-auth` OrgService RevokeInvite |
