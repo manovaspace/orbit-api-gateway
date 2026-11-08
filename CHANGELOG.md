@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1](https://github.com/manovaspace/orbit-api-gateway/compare/v0.8.0...v0.8.1) (2026-11-08)
+
+
+### Bug Fixes
+
+* **deps:** drop sibling replace directives from go.mod ([83be40c](https://github.com/manovaspace/orbit-api-gateway/commit/83be40cabbb2e676e3c1cb1b52a61c44e17fe0eb))
+* **deps:** drop sibling replace directives from go.mod ([459cc24](https://github.com/manovaspace/orbit-api-gateway/commit/459cc248ce3a58477383b97951371727f006bc1d)), closes [#68](https://github.com/manovaspace/orbit-api-gateway/issues/68)
+* **ratelimit:** key organization budgets on the caller, not the path ([8b331f0](https://github.com/manovaspace/orbit-api-gateway/commit/8b331f08667edd1cb7f38ef789157b6593245c66))
+* **ratelimit:** key organization budgets on the caller, not the path ([5e1a6ea](https://github.com/manovaspace/orbit-api-gateway/commit/5e1a6eaaf05f07a0d38995cb58f32ad1079fedca)), closes [#69](https://github.com/manovaspace/orbit-api-gateway/issues/69)
+
 ## [0.8.0](https://github.com/manovaspace/orbit-api-gateway/compare/v0.7.1...v0.8.0) (2026-11-08)
 
 
