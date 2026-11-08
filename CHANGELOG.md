@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0](https://github.com/manovaspace/orbit-api-gateway/compare/v0.8.1...v0.9.0) (2026-11-08)
+
+
+### Features
+
+* **staff:** accept Keycloak staff tokens on staff routes ([4ab8db1](https://github.com/manovaspace/orbit-api-gateway/commit/4ab8db1d3b232a4e3f61eb0ca7539e9b8b712e57))
+* **staff:** accept Keycloak staff tokens on staff routes ([00a5142](https://github.com/manovaspace/orbit-api-gateway/commit/00a5142df969268c9b076879765c05c7a2addc40)), closes [#82](https://github.com/manovaspace/orbit-api-gateway/issues/82)
+
 ## [0.8.1](https://github.com/manovaspace/orbit-api-gateway/compare/v0.8.0...v0.8.1) (2026-11-08)
 
 
