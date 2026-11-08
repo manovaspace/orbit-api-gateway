@@ -80,7 +80,7 @@ Agent routing: `openapi` / `orbit-api-gateway` in `handbook/cursor/agent-routing
 ## Configuration
 
 - **Auth upstream:** `AUTH_GRPC_ADDR` (default `localhost:10010`).
-- **Rate limiting:** `REDIS_ADDR` selects the Redis limiter; without it `DEPLOYMENT_ENVIRONMENT=dev` uses the memory limiter and anything else refuses to start. `RATE_LIMIT_TRUST_PROXY=true` reads the client address from `X-Forwarded-For`.
+- **Rate limiting:** `REDIS_ADDR` selects the Redis limiter; without it `DEPLOYMENT_ENVIRONMENT=dev` uses the memory limiter and anything else refuses to start. `RATE_LIMIT_TRUSTED_PROXIES` (comma-separated CIDRs or IPs) names the peers whose `X-Forwarded-For` is believed: from a trusted peer the client is the rightmost untrusted hop, otherwise the socket address is used and the header is ignored. `RATE_LIMIT_TRUST_PROXY=true` is deprecated: it trusts every peer and reads the first `X-Forwarded-For` entry.
 - **Tokens:** `JWT_SECRET` is required outside dev (`dev-insecure-change-me` in dev). `JWT_PUBLIC_KEYS_DIR` publishes `/.well-known/jwks.json`; it is required outside dev.
 - **Ports:** `HTTP_PORT` (default `10001`), `HEALTH_PORT` (default `10014`).
 

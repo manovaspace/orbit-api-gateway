@@ -77,11 +77,18 @@ func main() {
 		Logger:     func(msg string, args ...any) { log.Info(msg, args...) },
 	})
 
+	trustedProxies, err := httpapi.ParseTrustedProxies(os.Getenv("RATE_LIMIT_TRUSTED_PROXIES"))
+	if err != nil {
+		log.Error("invalid RATE_LIMIT_TRUSTED_PROXIES", "error", err)
+		os.Exit(1)
+	}
+
 	dev := os.Getenv("DEPLOYMENT_ENVIRONMENT") == "dev"
 	srv := httpapi.New(svc, httpapi.Options{
-		TrustProxy:  strings.EqualFold(os.Getenv("RATE_LIMIT_TRUST_PROXY"), "true"),
-		JWTSecret:   resolveJWTSecret(os.Getenv("JWT_SECRET"), dev),
-		StaffSecret: os.Getenv("STAFF_SECRET"),
+		TrustedProxies: trustedProxies,
+		TrustProxy:     strings.EqualFold(os.Getenv("RATE_LIMIT_TRUST_PROXY"), "true"),
+		JWTSecret:      resolveJWTSecret(os.Getenv("JWT_SECRET"), dev),
+		StaffSecret:    os.Getenv("STAFF_SECRET"),
 	})
 	if dir := os.Getenv("JWT_PUBLIC_KEYS_DIR"); dir != "" {
 		doc, err := jwks.Load(dir)

@@ -11,8 +11,8 @@ import (
 // handlers serves the edge's routes. Every route is a plain net/http handler,
 // adapted to Fiber v3 by the server; the shapes below are the external contract.
 type handlers struct {
-	svc        *application.Service
-	trustProxy bool
+	svc    *application.Service
+	client clientAddr
 }
 
 func (h *handlers) health(w http.ResponseWriter, _ *http.Request) {
@@ -44,7 +44,7 @@ func (h *handlers) wrap(class string, next http.HandlerFunc) http.HandlerFunc {
 		return next
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		decision, err := h.svc.CheckClassLimit(r.Context(), class, clientIP(r, h.trustProxy))
+		decision, err := h.svc.CheckClassLimit(r.Context(), class, h.client.ip(r))
 		if err != nil {
 			writeLimitError(w, err)
 			return

@@ -9,6 +9,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"net/netip"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -31,7 +32,13 @@ type Server struct {
 
 // Options configure the edge.
 type Options struct {
-	// TrustProxy makes the edge read the client address from X-Forwarded-For.
+	// TrustedProxies lists the peers whose X-Forwarded-For is believed. From
+	// such a peer the rate limiter buckets on the rightmost untrusted hop; from
+	// any other peer the socket address is used and the header is ignored.
+	TrustedProxies []netip.Prefix
+	// TrustProxy is deprecated. It trusts X-Forwarded-For from every peer, the
+	// same as TrustedProxies 0.0.0.0/0 and ::/0, and reads the first entry.
+	// When it is set, TrustedProxies is ignored.
 	TrustProxy bool
 	// JWTSecret is the HS256 secret for the token middleware a deployment
 	// binary mounts. Empty makes that middleware fail closed.
@@ -44,7 +51,7 @@ type Options struct {
 // Product backends mount additional routes in their deployment binary or in an
 // edge reverse proxy; this binary still does not proxy them.
 func New(svc *application.Service, opts Options) *Server {
-	h := &handlers{svc: svc, trustProxy: opts.TrustProxy}
+	h := &handlers{svc: svc, client: clientAddr{trustAll: opts.TrustProxy, trusted: opts.TrustedProxies}}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", h.health)

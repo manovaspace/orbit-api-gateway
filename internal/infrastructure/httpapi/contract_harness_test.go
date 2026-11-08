@@ -16,6 +16,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"testing"
 	"time"
@@ -37,6 +38,7 @@ import (
 
 type contractConfig struct {
 	trustProxy     bool
+	trustedProxies []netip.Prefix
 	failingLimiter bool
 }
 
@@ -84,7 +86,7 @@ func newContractEnvWith(t *testing.T, cfg contractConfig, withJWKS bool) *contra
 		Claims:     memory.NewClaims(),
 		Assets:     assets.New("openapi"),
 	})
-	srv := New(svc, Options{TrustProxy: cfg.trustProxy, JWTSecret: "contract-secret"})
+	srv := New(svc, Options{TrustProxy: cfg.trustProxy, TrustedProxies: cfg.trustedProxies, JWTSecret: "contract-secret"})
 
 	if withJWKS {
 		key, err := rsa.GenerateKey(rand.Reader, 2048)
