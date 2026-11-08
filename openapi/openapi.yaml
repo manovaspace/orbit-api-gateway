@@ -1488,6 +1488,44 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    staffBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Staff access token, in one of two forms:
+
+        - An RS256 access token from the Keycloak staff realm, verified against
+          its JWKS. The issuer and audience must match the gateway's staff OIDC
+          configuration, and the token must carry a staff group in `groups`.
+          Staff identity is `keycloak:` plus the token `sub`.
+        - A legacy HS256 staff token. It is accepted only while
+          `STAFF_HS256_ENABLED` is not `false`.
+
+        The break-glass reason and the target organization of a Keycloak staff
+        request come from the `X-Staff-Reason` and `X-Staff-Target-Org` headers,
+        never from token claims.
+  parameters:
+    StaffReason:
+      name: X-Staff-Reason
+      in: header
+      required: false
+      description: |
+        Audited reason for a staff request. Required and non-empty for every
+        request that is not GET or HEAD; otherwise the gateway answers 400
+        `staff reason required`.
+      schema:
+        type: string
+        minLength: 1
+    StaffTargetOrg:
+      name: X-Staff-Target-Org
+      in: header
+      required: false
+      description: |
+        Tenant organization a Keycloak staff request acts on. A non-empty value
+        marks the request as break-glass access.
+      schema:
+        type: string
   schemas:
     TokenPair:
       type: object

@@ -19,15 +19,18 @@ import (
 
 	"github.com/manovaspace/orbit-api-gateway/internal/application"
 	"github.com/manovaspace/orbit-api-gateway/internal/domain"
+	"github.com/manovaspace/orbit-api-gateway/internal/infrastructure/staffoidc"
 )
 
 // Server wraps the Fiber app so main only starts and stops it.
 type Server struct {
-	app         *fiber.App
-	mux         *http.ServeMux
-	svc         *application.Service
-	jwtSecret   string
-	staffSecret string
+	app                *fiber.App
+	mux                *http.ServeMux
+	svc                *application.Service
+	jwtSecret          string
+	staffSecret        string
+	staffOIDC          *staffoidc.Verifier
+	staffHS256Disabled bool
 }
 
 // Options configure the edge.
@@ -45,6 +48,10 @@ type Options struct {
 	JWTSecret string
 	// StaffSecret is the secret for staff credentials. Defaults to JWTSecret when empty.
 	StaffSecret string
+	// StaffOIDC verifies Keycloak staff access tokens. Nil leaves them off.
+	StaffOIDC *staffoidc.Verifier
+	// StaffHS256Disabled refuses HS256 staff tokens (STAFF_HS256_ENABLED=false).
+	StaffHS256Disabled bool
 }
 
 // New builds the platform REST edge (auth + ownership + onboarding + OpenAPI).
@@ -125,6 +132,8 @@ func New(svc *application.Service, opts Options) *Server {
 	server.svc = svc
 	server.jwtSecret = opts.JWTSecret
 	server.staffSecret = opts.StaffSecret
+	server.staffOIDC = opts.StaffOIDC
+	server.staffHS256Disabled = opts.StaffHS256Disabled
 	return server
 }
 
@@ -200,7 +209,7 @@ func (s *Server) TokenAuth() *TokenAuth {
 	if s.staffSecret != "" {
 		ta.WithStaffSecret(s.staffSecret)
 	}
-	return ta
+	return ta.WithStaffOIDC(s.staffOIDC).WithStaffHS256Disabled(s.staffHS256Disabled)
 }
 
 // StaffAuth returns the staff auth middleware.

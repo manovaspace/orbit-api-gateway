@@ -33,3 +33,29 @@ func TestEnvOr(t *testing.T) {
 		t.Fatalf("envOr = %q, want set", got)
 	}
 }
+
+func TestStaffOIDCFromEnv(t *testing.T) {
+	t.Setenv("STAFF_OIDC_ISSUER", "")
+	t.Setenv("STAFF_OIDC_AUDIENCE", "")
+	t.Setenv("STAFF_OIDC_ALLOWED_GROUPS", "")
+	if v, err := staffOIDCFromEnv(); v != nil || err != nil {
+		t.Fatalf("unset: verifier = %v, err = %v; want off with no error", v, err)
+	}
+
+	t.Setenv("STAFF_OIDC_ISSUER", "https://identity.internal.manova.space/realms/staff")
+	t.Setenv("STAFF_OIDC_AUDIENCE", "falak-console")
+	t.Setenv("STAFF_OIDC_ALLOWED_GROUPS", " , ,")
+	if v, _ := staffOIDCFromEnv(); v != nil {
+		t.Fatal("groups with only blank items must leave staff OIDC off")
+	}
+
+	t.Setenv("STAFF_OIDC_ALLOWED_GROUPS", "dev, /admins ,")
+	if v, err := staffOIDCFromEnv(); v == nil || err != nil {
+		t.Fatalf("all set: verifier = %v, err = %v; want enabled", v, err)
+	}
+
+	t.Setenv("STAFF_OIDC_AUDIENCE", "")
+	if v, _ := staffOIDCFromEnv(); v != nil {
+		t.Fatal("missing audience must leave staff OIDC off")
+	}
+}
