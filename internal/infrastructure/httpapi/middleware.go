@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/manovaspace/orbit-api-gateway/internal/application"
 	"github.com/manovaspace/orbit-api-gateway/internal/domain"
+	"github.com/manovaspace/orbit-api-gateway/internal/infrastructure/staffoidc"
 )
 
 // TokenAuth validates bearer credentials for the routes a deployment binary
@@ -18,7 +20,24 @@ type TokenAuth struct {
 	svc         *application.Service
 	secret      string
 	staffSecret string
+	// oidc verifies Keycloak staff access tokens (RS256). Nil leaves staff
+	// sign-in to the HS256 path only.
+	oidc *staffoidc.Verifier
+	// hs256StaffDisabled refuses HS256 staff tokens. The zero value keeps them
+	// accepted, which is the default.
+	hs256StaffDisabled bool
 }
+
+const (
+	// staffReasonHeader carries the audited reason for a Keycloak staff request.
+	// It is required for every non-read request.
+	staffReasonHeader = "X-Staff-Reason"
+	// staffTargetOrgHeader names the tenant a Keycloak staff request acts on.
+	staffTargetOrgHeader = "X-Staff-Target-Org"
+	// keycloakSubjectPrefix keeps Keycloak staff subjects apart from orbit-auth
+	// user ids.
+	keycloakSubjectPrefix = "keycloak:"
+)
 
 // NewTokenAuth builds the middleware. An empty secret makes every request fail
 // closed with 500, as before.
@@ -31,6 +50,18 @@ func (a *TokenAuth) WithStaffSecret(staffSecret string) *TokenAuth {
 	if staffSecret != "" {
 		a.staffSecret = staffSecret
 	}
+	return a
+}
+
+// WithStaffOIDC enables Keycloak staff tokens. A nil verifier leaves them off.
+func (a *TokenAuth) WithStaffOIDC(verifier *staffoidc.Verifier) *TokenAuth {
+	a.oidc = verifier
+	return a
+}
+
+// WithStaffHS256Disabled refuses HS256 staff tokens when disabled is true.
+func (a *TokenAuth) WithStaffHS256Disabled(disabled bool) *TokenAuth {
+	a.hs256StaffDisabled = disabled
 	return a
 }
 
@@ -49,6 +80,9 @@ type breakGlassKey struct{}
 type staffIdentityKey struct{}
 
 type targetOrgKey struct{}
+
+// keycloakStaffKey marks a context whose staff identity was verified by Keycloak.
+type keycloakStaffKey struct{}
 
 // StaffIdentity holds claims from a staff token.
 type StaffIdentity struct {
@@ -129,7 +163,7 @@ func (a *TokenAuth) JWT(next http.Handler) http.Handler {
 // If the caller is unauthenticated or has an invalid token, it returns 401 Unauthorized.
 func (a *TokenAuth) RequireStaff(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if a.secret == "" && a.staffSecret == "" {
+		if a.secret == "" && a.staffSecret == "" && a.oidc == nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "auth misconfigured"})
 			return
 		}
@@ -149,6 +183,19 @@ func (a *TokenAuth) RequireStaff(next http.Handler) http.Handler {
 			return
 		}
 		tokenString := strings.TrimPrefix(authorization, "Bearer ")
+		alg, kid, ok := unverifiedHeader(tokenString)
+		if !ok {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+			return
+		}
+		if alg == "RS256" && a.oidc != nil && kid != "" {
+			a.requireKeycloakStaff(next, w, r, tokenString)
+			return
+		}
+		if a.hs256StaffDisabled {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+			return
+		}
 		claims, ok := a.parseToken(tokenString)
 		if !ok {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
@@ -165,6 +212,55 @@ func (a *TokenAuth) RequireStaff(next http.Handler) http.Handler {
 		}
 		ctx := enrichContext(r.Context(), claims, subject)
 		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// requireKeycloakStaff verifies a Keycloak staff token and attaches the staff
+// identity. The break-glass reason and the target org come from request
+// headers, never from token claims.
+func (a *TokenAuth) requireKeycloakStaff(next http.Handler, w http.ResponseWriter, r *http.Request, tokenString string) {
+	identity, err := a.oidc.Verify(r.Context(), tokenString)
+	if err != nil {
+		if errors.Is(err, staffoidc.ErrNotAllowed) {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "staff access required"})
+			return
+		}
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+		return
+	}
+	reason := strings.TrimSpace(r.Header.Get(staffReasonHeader))
+	if reason == "" && !isReadMethod(r.Method) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "staff reason required"})
+		return
+	}
+	targetOrg := strings.TrimSpace(r.Header.Get(staffTargetOrgHeader))
+	staff := StaffIdentity{
+		StaffSubject:     keycloakSubjectPrefix + identity.Subject,
+		IsStaff:          true,
+		BreakGlass:       targetOrg != "",
+		BreakGlassReason: reason,
+		TargetOrgID:      targetOrg,
+	}
+	next.ServeHTTP(w, r.WithContext(enrichStaffContext(r.Context(), staff)))
+}
+
+// StaffRateLimit applies the class budget to a Keycloak-authenticated staff
+// caller, keyed on the staff subject. It runs after RequireStaff. Other callers
+// and deployments without a limiter pass through unchanged.
+func (a *TokenAuth) StaffRateLimit(class string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		subject, ok := keycloakStaffSubject(r.Context())
+		if !ok || a.svc == nil || !a.svc.HasLimiter() {
+			next.ServeHTTP(w, r)
+			return
+		}
+		decision, err := a.svc.CheckStaffLimit(r.Context(), class, subject)
+		if err != nil {
+			writeLimitError(w, err)
+			return
+		}
+		setRateLimitHeaders(w, decision)
+		next.ServeHTTP(w, r)
 	})
 }
 
@@ -354,8 +450,15 @@ func enrichContext(ctx context.Context, claims jwt.MapClaims, subject string) co
 }
 
 // jwtSubject parses an HS256 JWT and writes the 401 response when it does not verify.
+// With HS256 staff tokens disabled, a token that carries staff claims is refused here
+// too, so it cannot reach staff context through a tenant route.
 func (a *TokenAuth) jwtSubject(w http.ResponseWriter, tokenString string) (string, jwt.MapClaims, bool) {
 	claims, ok := a.parseToken(tokenString)
+	if ok && a.hs256StaffDisabled {
+		if _, isStaff := extractStaffIdentity(claims); isStaff {
+			ok = false
+		}
+	}
 	if !ok {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
 		return "", nil, false
@@ -367,6 +470,48 @@ func (a *TokenAuth) jwtSubject(w http.ResponseWriter, tokenString string) (strin
 		}
 	}
 	return subject, claims, true
+}
+
+// unverifiedHeader reads alg and kid from the token header without checking the
+// signature. The result only chooses which verifier runs.
+func unverifiedHeader(tokenString string) (alg, kid string, ok bool) {
+	token, _, err := jwt.NewParser().ParseUnverified(tokenString, jwt.MapClaims{})
+	if err != nil {
+		return "", "", false
+	}
+	alg, _ = token.Header["alg"].(string)
+	kid, _ = token.Header["kid"].(string)
+	return alg, kid, true
+}
+
+// isReadMethod reports whether a request only reads. Reads need no break-glass reason.
+func isReadMethod(method string) bool {
+	return method == http.MethodGet || method == http.MethodHead
+}
+
+// enrichStaffContext attaches a verified staff identity. Keycloak subjects are
+// already prefixed, so they never equal an orbit-auth user id.
+func enrichStaffContext(ctx context.Context, staff StaffIdentity) context.Context {
+	ctx = context.WithValue(ctx, userIDKey{}, staff.StaffSubject)
+	ctx = context.WithValue(ctx, isStaffKey{}, true)
+	ctx = context.WithValue(ctx, staffSubjectKey{}, staff.StaffSubject)
+	ctx = context.WithValue(ctx, breakGlassKey{}, staff.BreakGlass)
+	ctx = context.WithValue(ctx, breakGlassReasonKey{}, staff.BreakGlassReason)
+	ctx = context.WithValue(ctx, staffIdentityKey{}, staff)
+	ctx = context.WithValue(ctx, keycloakStaffKey{}, true)
+	if staff.TargetOrgID != "" {
+		ctx = context.WithValue(ctx, targetOrgKey{}, staff.TargetOrgID)
+	}
+	return ctx
+}
+
+// keycloakStaffSubject returns the staff subject when the caller was verified by Keycloak.
+func keycloakStaffSubject(ctx context.Context) (string, bool) {
+	verified, _ := ctx.Value(keycloakStaffKey{}).(bool)
+	if !verified {
+		return "", false
+	}
+	return StaffSubjectFromContext(ctx), true
 }
 
 // scopesAllow: empty scopes = full access (legacy tokens). Non-empty: GET, HEAD

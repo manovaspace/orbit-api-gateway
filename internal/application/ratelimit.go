@@ -13,6 +13,12 @@ func (s *Service) CheckClassLimit(ctx context.Context, class, clientIP string) (
 	return s.allow(ctx, domain.ClientKey(class, clientIP), domain.PolicyFor(class))
 }
 
+// CheckStaffLimit applies one route class policy to a Keycloak-authenticated
+// staff caller, keyed on the staff subject.
+func (s *Service) CheckStaffLimit(ctx context.Context, class, staffSubject string) (domain.Decision, error) {
+	return s.allow(ctx, domain.StaffKey(class, staffSubject), domain.PolicyFor(class))
+}
+
 // allow is the single place that turns limiter errors and denials into the
 // failures the edge renders.
 func (s *Service) allow(ctx context.Context, key string, policy domain.Policy) (domain.Decision, error) {

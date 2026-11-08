@@ -19,6 +19,7 @@ import (
 	"github.com/manovaspace/orbit-api-gateway/internal/infrastructure/jwks"
 	"github.com/manovaspace/orbit-api-gateway/internal/infrastructure/memory"
 	"github.com/manovaspace/orbit-api-gateway/internal/infrastructure/ratelimit"
+	"github.com/manovaspace/orbit-api-gateway/internal/infrastructure/staffoidc"
 )
 
 var version = "dev"
@@ -83,12 +84,25 @@ func main() {
 		os.Exit(1)
 	}
 
+	staffOIDC, err := staffOIDCFromEnv()
+	if err != nil {
+		log.Error("invalid staff OIDC config", "error", err)
+		os.Exit(1)
+	}
+	if staffOIDC == nil {
+		log.Info("staff OIDC is off: STAFF_OIDC_ISSUER, STAFF_OIDC_AUDIENCE and STAFF_OIDC_ALLOWED_GROUPS must all be set")
+	} else {
+		log.Info("staff OIDC enabled", "issuer", os.Getenv("STAFF_OIDC_ISSUER"))
+	}
+
 	dev := os.Getenv("DEPLOYMENT_ENVIRONMENT") == "dev"
 	srv := httpapi.New(svc, httpapi.Options{
-		TrustedProxies: trustedProxies,
-		TrustProxy:     strings.EqualFold(os.Getenv("RATE_LIMIT_TRUST_PROXY"), "true"),
-		JWTSecret:      resolveJWTSecret(os.Getenv("JWT_SECRET"), dev),
-		StaffSecret:    os.Getenv("STAFF_SECRET"),
+		TrustedProxies:     trustedProxies,
+		TrustProxy:         strings.EqualFold(os.Getenv("RATE_LIMIT_TRUST_PROXY"), "true"),
+		JWTSecret:          resolveJWTSecret(os.Getenv("JWT_SECRET"), dev),
+		StaffSecret:        os.Getenv("STAFF_SECRET"),
+		StaffOIDC:          staffOIDC,
+		StaffHS256Disabled: strings.EqualFold(strings.TrimSpace(os.Getenv("STAFF_HS256_ENABLED")), "false"),
 	})
 	if dir := os.Getenv("JWT_PUBLIC_KEYS_DIR"); dir != "" {
 		doc, err := jwks.Load(dir)
@@ -143,6 +157,36 @@ func resolveJWTSecret(secret string, dev bool) string {
 		return devInsecureJWTSecret
 	}
 	return ""
+}
+
+// staffOIDCFromEnv builds the Keycloak staff verifier from STAFF_OIDC_ISSUER,
+// STAFF_OIDC_AUDIENCE, STAFF_OIDC_ALLOWED_GROUPS (comma list) and the optional
+// STAFF_OIDC_JWKS_URL. It returns nil, with no error, when any of the three
+// required values is missing: staff OIDC is then off.
+func staffOIDCFromEnv() (*staffoidc.Verifier, error) {
+	issuer := strings.TrimSpace(os.Getenv("STAFF_OIDC_ISSUER"))
+	audience := strings.TrimSpace(os.Getenv("STAFF_OIDC_AUDIENCE"))
+	groups := splitList(os.Getenv("STAFF_OIDC_ALLOWED_GROUPS"))
+	if issuer == "" || audience == "" || len(groups) == 0 {
+		return nil, nil
+	}
+	return staffoidc.New(staffoidc.Config{
+		Issuer:        issuer,
+		Audience:      audience,
+		AllowedGroups: groups,
+		JWKSURL:       strings.TrimSpace(os.Getenv("STAFF_OIDC_JWKS_URL")),
+	})
+}
+
+// splitList splits a comma list, trims each item and drops empty ones.
+func splitList(raw string) []string {
+	var items []string
+	for _, item := range strings.Split(raw, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			items = append(items, item)
+		}
+	}
+	return items
 }
 
 func envOr(key, fallback string) string {

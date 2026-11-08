@@ -125,6 +125,12 @@ func ClientKey(class, clientIP string) string {
 	return clientKeyPrefix + class + ":" + clientIP
 }
 
+// StaffKey is the per-class bucket for a Keycloak-authenticated staff caller,
+// keyed on the staff subject rather than the network address.
+func StaffKey(class, staffSubject string) string {
+	return clientKeyPrefix + class + ":staff:" + staffSubject
+}
+
 // IdentifierKey is the per-identifier OTP request bucket key.
 func IdentifierKey(identifier string) string {
 	return identifierKeyPrefix + HashIdentifier(identifier)
