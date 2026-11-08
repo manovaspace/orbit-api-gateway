@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0](https://github.com/manovaspace/orbit-api-gateway/compare/v0.7.1...v0.8.0) (2026-11-08)
+
+
+### Features
+
+* **auth:** expose refresh-token revocation as POST /api/v1/auth/token/revoke ([c0cd7ae](https://github.com/manovaspace/orbit-api-gateway/commit/c0cd7aec1a2db0e8d62188ebf429ca004946d766))
+* **auth:** expose refresh-token revocation as POST /api/v1/auth/token/revoke ([7918e56](https://github.com/manovaspace/orbit-api-gateway/commit/7918e56035b5d6f62345688be013dd0d62544ab7))
+
 ## [0.7.1](https://github.com/manovaspace/orbit-api-gateway/compare/v0.7.0...v0.7.1) (2026-11-08)
 
 
