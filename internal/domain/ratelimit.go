@@ -42,7 +42,11 @@ const (
 	// OrgRouteLimit is the per-organization budget for organization-scoped
 	// routes.
 	OrgRouteLimit = 60
-	RouteWindow   = time.Minute
+	// OrgRouteIPLimit is the per-IP budget on organization routes, counted
+	// before authentication, so one client cannot flood orbit-auth with junk
+	// tokens.
+	OrgRouteIPLimit = 300
+	RouteWindow     = time.Minute
 )
 
 // Policy describes one token-bucket class.
