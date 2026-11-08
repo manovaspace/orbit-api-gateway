@@ -53,6 +53,7 @@ Agent routing: `openapi` / `orbit-api-gateway` in `handbook/cursor/agent-routing
 | `POST` | `/api/v1/auth/otp/verify` | Upstream `orbit-auth` VerifyOTP |
 | `POST` | `/api/v1/auth/login` | Upstream `orbit-auth` LoginWithPassword (`identifier`: email or E.164 mobile) |
 | `POST` | `/api/v1/auth/token/refresh` | Upstream `orbit-auth` RefreshToken |
+| `POST` | `/api/v1/auth/token/revoke` | Upstream `orbit-auth` RevokeRefreshToken; idempotent, answers 204 |
 | `POST` | `/api/v1/auth/signup` | Upstream `orbit-auth` SignupService RegisterWithEmail. Unauthenticated; same 202 for new and existing addresses; disabled sign-up answers 404 |
 | `POST` | `/api/v1/auth/signup/verify` | Upstream `orbit-auth` SignupService VerifySignup; returns `TokenPair` |
 | `GET` | `/api/v1/orgs` | Upstream `orbit-auth` OrgService ListMyOrgs (bearer access token) |

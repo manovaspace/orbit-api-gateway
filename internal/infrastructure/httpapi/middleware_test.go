@@ -34,6 +34,10 @@ func (f fakeIdentity) RefreshToken(context.Context, string) (domain.TokenPair, e
 	return domain.TokenPair{}, nil
 }
 
+func (f fakeIdentity) RevokeRefreshToken(context.Context, string) error {
+	return nil
+}
+
 func (f fakeIdentity) ValidateAPIToken(_ context.Context, secret string) (domain.APIIdentity, error) {
 	identity, ok := f.identities[secret]
 	if !ok {

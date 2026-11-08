@@ -108,6 +108,16 @@ func (c *Client) RefreshToken(ctx context.Context, refreshToken string) (domain.
 	return tokenPair(resp), nil
 }
 
+// RevokeRefreshToken revokes a refresh token. The upstream answers success for
+// unknown, revoked, expired and empty tokens, so only real failures return.
+func (c *Client) RevokeRefreshToken(ctx context.Context, refreshToken string) error {
+	_, err := c.api.RevokeRefreshToken(ctx, &authv1.RevokeRefreshTokenRequest{RefreshToken: refreshToken})
+	if err != nil {
+		return upstreamError(err)
+	}
+	return nil
+}
+
 // ValidateAPIToken validates an oat_ API token and returns its identity.
 func (c *Client) ValidateAPIToken(ctx context.Context, secret string) (domain.APIIdentity, error) {
 	resp, err := c.api.ValidateApiToken(ctx, &authv1.ValidateApiTokenRequest{Secret: secret})

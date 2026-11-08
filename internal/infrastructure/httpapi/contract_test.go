@@ -322,6 +322,23 @@ func TestContractAuthRoutes(t *testing.T) {
 		}
 	})
 
+	t.Run("revoke", func(t *testing.T) {
+		env := newContractEnv(t, contractConfig{})
+		for _, body := range []string{`{"refresh_token":"valid"}`, `{"refresh_token":"unknown"}`, `{"refresh_token":""}`} {
+			got := send(t, env.main, http.MethodPost, "/api/v1/auth/token/revoke", body, nil)
+			if got.Status != http.StatusNoContent {
+				t.Fatalf("revoke %s status = %d, want 204", body, got.Status)
+			}
+			if got.Body != "" {
+				t.Fatalf("revoke %s body = %q, want empty", body, got.Body)
+			}
+		}
+		got := send(t, env.main, http.MethodPost, "/api/v1/auth/token/revoke", `{"refresh_token":"valid"}`, nil)
+		if got.RateLimit != "30/26" {
+			t.Fatalf("class rate-limit headers = %q, want 30/26", got.RateLimit)
+		}
+	})
+
 	errorTests := []struct {
 		name       string
 		path       string
@@ -338,6 +355,8 @@ func TestContractAuthRoutes(t *testing.T) {
 		{"verify failure", "/api/v1/auth/otp/verify", `{"identifier":"person@example.com","code":"000000"}`, http.StatusInternalServerError, `{"error":"upstream error"}` + "\n"},
 		{"login failure", "/api/v1/auth/login", `{"identifier":"person@example.com","password":"wrong"}`, http.StatusUnauthorized, `{"error":"bad credentials"}` + "\n"},
 		{"refresh failure", "/api/v1/auth/token/refresh", `{"refresh_token":"nope"}`, http.StatusInternalServerError, `{"error":"upstream error"}` + "\n"},
+		{"revoke failure", "/api/v1/auth/token/revoke", `{"refresh_token":"boom"}`, http.StatusInternalServerError, `{"error":"upstream error"}` + "\n"},
+		{"revoke invalid json", "/api/v1/auth/token/revoke", `not json`, http.StatusBadRequest, `{"error":"invalid json"}` + "\n"},
 		{"invalid json", "/api/v1/auth/login", `not json`, http.StatusBadRequest, `{"error":"invalid json"}` + "\n"},
 		{"empty body", "/api/v1/auth/login", ``, http.StatusBadRequest, `{"error":"invalid json"}` + "\n"},
 	}
@@ -733,7 +752,7 @@ func jsonHeaders() map[string]string {
 // before the Fiber v3 migration.
 const (
 	installerDigest = "f87e363d4ac3ea888dfe28b4b713fbcf38268ef68226f9c02b4537933dafd926"
-	specDigest      = "d1d74e93e5656a0ca04b36e4eff1f956d56875c45a462af1115844a60b7791b5"
+	specDigest      = "38cf8e5a7537af414968633611a9a4a73e08a0c038f868199d79868a2e0add9e"
 	manifestDigest  = "52d4ee360e6f9693c042a1f2e95b0155b8e68f51178d43cd3726a595cd2517a6"
 
 	claimBodyFixture        = `{"status":"provisioned","idempotent_replay":false,"user":{"uid":"john","email":"john@example.com","display_name":"John Doe","groups":["dev","orbit"]},"credentials":{"forgejo_username":"john","forgejo_mcp_token":"%s","wireguard_config":"[Interface]\nPrivateKey = \u003cgenerated-client-key\u003e\nAddress = 10.42.0.53/32\nDNS = 10.42.0.1\n\n[Peer]\nPublicKey = 4gZ+examplePublicKeyOrbitGatewayVPNControllerKey=\nEndpoint = vpn.internal.manova.space:51820\nAllowedIPs = 10.42.0.0/16, 172.28.0.0/16\nPersistentKeepalive = 25"},"workspace":{"git_remote_base":"ssh://git@git.internal.manova.space:2222/manova","default_manifest_scope":"core"}}` + "\n"

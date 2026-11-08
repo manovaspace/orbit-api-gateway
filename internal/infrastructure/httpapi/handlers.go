@@ -147,6 +147,18 @@ func (h *handlers) refreshToken(w http.ResponseWriter, r *http.Request) {
 	writeTokens(w, tokens)
 }
 
+func (h *handlers) revokeToken(w http.ResponseWriter, r *http.Request) {
+	var body refreshBody
+	if !decodeJSONBody(w, r, &body) {
+		return
+	}
+	if err := h.svc.RevokeRefreshToken(r.Context(), body.RefreshToken); err != nil {
+		writeAppError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // writeTokens renders the token envelope. Encoding a map keeps the keys in
 // their historical alphabetical order, so the body bytes do not change.
 func writeTokens(w http.ResponseWriter, tokens domain.TokenPair) {

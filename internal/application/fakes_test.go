@@ -15,11 +15,13 @@ type fakeAuth struct {
 	verifyOTP   func(domain.OTPVerification) (domain.TokenPair, error)
 	login       func(domain.PasswordLogin) (domain.TokenPair, error)
 	refresh     func(string) (domain.TokenPair, error)
+	revoke      func(string) error
 	validate    func(string) (domain.APIIdentity, error)
 	requestSeen []domain.OTPRequest
 	loginSeen   []domain.PasswordLogin
 	verifySeen  []domain.OTPVerification
 	refreshSeen []string
+	revokeSeen  []string
 }
 
 func (f *fakeAuth) RequestOTP(_ context.Context, in domain.OTPRequest) (string, error) {
@@ -52,6 +54,14 @@ func (f *fakeAuth) RefreshToken(_ context.Context, token string) (domain.TokenPa
 		return f.refresh(token)
 	}
 	return domain.TokenPair{AccessToken: "a2", RefreshToken: "r2", ExpiresAt: "e"}, nil
+}
+
+func (f *fakeAuth) RevokeRefreshToken(_ context.Context, token string) error {
+	f.revokeSeen = append(f.revokeSeen, token)
+	if f.revoke != nil {
+		return f.revoke(token)
+	}
+	return nil
 }
 
 func (f *fakeAuth) ValidateAPIToken(_ context.Context, secret string) (domain.APIIdentity, error) {

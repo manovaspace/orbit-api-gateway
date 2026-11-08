@@ -156,6 +156,12 @@ func TestVerifyRefreshAndValidateForwardToThePort(t *testing.T) {
 	if len(auth.refreshSeen) != 1 || auth.refreshSeen[0] != "refresh-token" {
 		t.Fatalf("refresh calls = %+v", auth.refreshSeen)
 	}
+	if err := svc.RevokeRefreshToken(ctx, "refresh-token"); err != nil {
+		t.Fatal(err)
+	}
+	if len(auth.revokeSeen) != 1 || auth.revokeSeen[0] != "refresh-token" {
+		t.Fatalf("revoke calls = %+v", auth.revokeSeen)
+	}
 	identity, err := svc.ValidateAPIToken(ctx, "oat_x")
 	if err != nil {
 		t.Fatal(err)

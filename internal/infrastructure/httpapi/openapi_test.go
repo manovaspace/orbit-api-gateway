@@ -18,6 +18,7 @@ var platformOpenAPIRoutes = []struct {
 	{"post", "/api/v1/auth/otp/request", "authOtpRequest"},
 	{"post", "/api/v1/auth/otp/verify", "authOtpVerify"},
 	{"post", "/api/v1/auth/token/refresh", "authTokenRefresh"},
+	{"post", "/api/v1/auth/token/revoke", "authTokenRevoke"},
 	{"post", "/api/v1/auth/signup", "authSignup"},
 	{"post", "/api/v1/auth/signup/verify", "authSignupVerify"},
 	{"get", "/api/v1/flags", "flagsList"},

@@ -5,7 +5,7 @@ go 1.27.3
 require (
 	github.com/gofiber/fiber/v3 v3.6.1
 	github.com/golang-jwt/jwt/v5 v5.3.1
-	github.com/manovaspace/orbit-auth v0.8.0
+	github.com/manovaspace/orbit-auth v0.8.1
 	github.com/manovaspace/orbit-observability v0.2.0
 	github.com/manovaspace/orbit-rate-limiting v0.2.0
 	github.com/redis/go-redis/v9 v9.23.0

@@ -63,6 +63,7 @@ func New(svc *application.Service, opts Options) *Server {
 		mux.HandleFunc("POST /api/v1/auth/otp/verify", wrap(domain.ClassAuthOTPVerify, h.verifyOTP))
 		mux.HandleFunc("POST /api/v1/auth/login", wrap(domain.ClassAuthPassword, h.login))
 		mux.HandleFunc("POST /api/v1/auth/token/refresh", wrap(domain.ClassAuthRefresh, h.refreshToken))
+		mux.HandleFunc("POST /api/v1/auth/token/revoke", wrap(domain.ClassAuthRefresh, h.revokeToken))
 	}
 
 	// Self-serve sign-up (unauthenticated, strict per-IP budget).

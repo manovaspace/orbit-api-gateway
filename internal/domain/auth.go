@@ -113,5 +113,6 @@ type AuthService interface {
 	VerifyOTP(ctx context.Context, in OTPVerification) (TokenPair, error)
 	LoginWithPassword(ctx context.Context, in PasswordLogin) (TokenPair, error)
 	RefreshToken(ctx context.Context, refreshToken string) (TokenPair, error)
+	RevokeRefreshToken(ctx context.Context, refreshToken string) error
 	ValidateAPIToken(ctx context.Context, secret string) (APIIdentity, error)
 }
