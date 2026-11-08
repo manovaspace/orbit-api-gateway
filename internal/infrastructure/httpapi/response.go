@@ -3,10 +3,8 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
-	"net"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/manovaspace/orbit-api-gateway/internal/domain"
 )
@@ -88,19 +86,4 @@ func setRateLimitHeaders(w http.ResponseWriter, decision domain.Decision) {
 	w.Header().Set("X-RateLimit-Limit", strconv.Itoa(decision.Limit))
 	w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(decision.Remaining))
 	w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(decision.ResetAt.Unix(), 10))
-}
-
-// clientIP returns the address the rate limiter buckets on. With a trusted
-// proxy it is the first X-Forwarded-For entry; otherwise the socket address.
-func clientIP(r *http.Request, trustProxy bool) string {
-	if trustProxy {
-		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-			return strings.TrimSpace(strings.Split(forwarded, ",")[0])
-		}
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }

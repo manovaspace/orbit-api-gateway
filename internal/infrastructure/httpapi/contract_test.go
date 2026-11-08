@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -502,6 +503,31 @@ func TestContractTrustProxyHeaderForwarding(t *testing.T) {
 			map[string]string{"X-Forwarded-For": "203.0.113.2"})
 		if got.Status != http.StatusUnauthorized {
 			t.Fatalf("a second forwarded client got %d, want 401", got.Status)
+		}
+	})
+
+	t.Run("trusted peer list separates clients", func(t *testing.T) {
+		// The loopback test client connects from 127.0.0.1, so that peer is trusted.
+		env := newContractEnv(t, contractConfig{trustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8")}})
+		for i := 0; i < 10; i++ {
+			got := send(t, env.main, http.MethodPost, "/api/v1/auth/login",
+				`{"identifier":"person@example.com","password":"wrong"}`,
+				map[string]string{"X-Forwarded-For": "203.0.113.1"})
+			if got.Status != http.StatusUnauthorized {
+				t.Fatalf("user A request %d status = %d", i+1, got.Status)
+			}
+		}
+		got := send(t, env.main, http.MethodPost, "/api/v1/auth/login",
+			`{"identifier":"person@example.com","password":"wrong"}`,
+			map[string]string{"X-Forwarded-For": "203.0.113.1"})
+		if got.Status != http.StatusTooManyRequests {
+			t.Fatalf("user A 11th login status = %d, want 429", got.Status)
+		}
+		got = send(t, env.main, http.MethodPost, "/api/v1/auth/login",
+			`{"identifier":"person@example.com","password":"wrong"}`,
+			map[string]string{"X-Forwarded-For": "203.0.113.2"})
+		if got.Status != http.StatusUnauthorized {
+			t.Fatalf("user B login status = %d, want 401", got.Status)
 		}
 	})
 

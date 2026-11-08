@@ -148,7 +148,7 @@ func (h *handlers) wrapIP(route string, limit int, next http.HandlerFunc) http.H
 	}
 	policy := domain.IPRoutePolicy(route, limit)
 	return func(w http.ResponseWriter, r *http.Request) {
-		key := ratelimit.KeyForIP(clientIP(r, h.trustProxy), route)
+		key := ratelimit.KeyForIP(h.client.ip(r), route)
 		h.applyRouteLimit(w, r, key, policy, next)
 	}
 }
