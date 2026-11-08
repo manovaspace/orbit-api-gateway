@@ -54,9 +54,3 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261026165753-2ffab32bce7e // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 )
-
-replace (
-	github.com/manovaspace/orbit-auth => ../orbit-auth
-	github.com/manovaspace/orbit-observability => ../orbit-observability
-	github.com/manovaspace/orbit-rate-limiting => ../orbit-rate-limiting
-)
