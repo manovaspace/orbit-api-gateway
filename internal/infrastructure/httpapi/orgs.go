@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"strings"
 
@@ -153,34 +155,81 @@ func (h *handlers) wrapIP(route string, limit int, next http.HandlerFunc) http.H
 	}
 }
 
-// wrapOrg applies the per-organization budget for a route with an {org_id}
-// path value.
+// wrapOrg applies the rate limits for a route with an {org_id} path value. The
+// order matters:
+//
+//  1. The per-IP budget is consumed before authentication, so one client cannot
+//     flood orbit-auth with junk tokens.
+//  2. The bearer token is required. A request without one gets 401 here and
+//     never touches an organization bucket, so anonymous traffic cannot spend a
+//     real administrator's budget.
+//  3. The per-organization budget is keyed on the organization and a fingerprint
+//     of the caller's token, so each caller has its own bucket.
+//
+// The handler runs only when all three allow the request.
 func (h *handlers) wrapOrg(route string, next http.HandlerFunc) http.HandlerFunc {
 	if !h.svc.HasLimiter() {
 		return next
 	}
-	policy := domain.OrgRoutePolicy(route)
+	ipPolicy := domain.IPRoutePolicy(route, domain.OrgRouteIPLimit)
+	orgPolicy := domain.OrgRoutePolicy(route)
 	return func(w http.ResponseWriter, r *http.Request) {
-		key := ratelimit.KeyForOrg(r.PathValue("org_id"), route)
-		h.applyRouteLimit(w, r, key, policy, next)
+		if !h.consume(w, r, ratelimit.KeyForIP(h.client.ip(r), route), ipPolicy) {
+			return
+		}
+		token, ok := h.requireBearer(w, r)
+		if !ok {
+			return
+		}
+		if !h.consume(w, r, orgCallerKey(r.PathValue("org_id"), token, route), orgPolicy) {
+			return
+		}
+		next(w, r)
 	}
 }
 
-// applyRouteLimit consumes one token, writes the budget headers and either
-// continues or renders the denial. An empty key is not addressable and is not
-// passed to the limiter.
+// applyRouteLimit consumes one token and either continues or renders the
+// denial.
 func (h *handlers) applyRouteLimit(w http.ResponseWriter, r *http.Request, key string, policy domain.Policy, next http.HandlerFunc) {
-	if key == "" {
-		next(w, r)
+	if !h.consume(w, r, key, policy) {
 		return
+	}
+	next(w, r)
+}
+
+// consume takes one token from the bucket for key, writes the budget headers
+// and reports whether the request may continue. On denial or limiter failure
+// the response is already written and it returns false. An empty key is not
+// addressable and is not passed to the limiter.
+func (h *handlers) consume(w http.ResponseWriter, r *http.Request, key string, policy domain.Policy) bool {
+	if key == "" {
+		return true
 	}
 	decision, err := h.svc.CheckKeyLimit(r.Context(), key, policy)
 	if err != nil {
 		writeLimitError(w, err)
-		return
+		return false
 	}
 	setRateLimitHeaders(w, decision)
-	next(w, r)
+	return true
+}
+
+// callerFingerprint returns the first 16 hex characters of the SHA-256 of the
+// bearer token. The gateway does not verify the token, so the bucket is keyed
+// on an unforgeable hash of it rather than on its unverified claims; a caller
+// can only spend its own budget.
+func callerFingerprint(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])[:16]
+}
+
+// orgCallerKey is the per-organization, per-caller bucket key. It is empty when
+// the organization id is blank, which the limiter never sees.
+func orgCallerKey(orgID, token, route string) string {
+	if strings.TrimSpace(orgID) == "" {
+		return ""
+	}
+	return ratelimit.KeyForOrg(orgID+"/"+callerFingerprint(token), route)
 }
 
 // requireBearer extracts the access token the edge forwards to orbit-auth. The
@@ -200,23 +249,14 @@ func (h *handlers) requireBearer(w http.ResponseWriter, r *http.Request) (string
 	return token, true
 }
 
-// checkOrgLimit applies the per-organization budget when the organization id
-// comes from the request body rather than the path.
-func (h *handlers) checkOrgLimit(w http.ResponseWriter, r *http.Request, orgID, route string) bool {
+// checkOrgLimit applies the per-organization, per-caller budget when the
+// organization id comes from the request body rather than the path. The caller
+// is identified by its bearer token, so the caller must be authenticated first.
+func (h *handlers) checkOrgLimit(w http.ResponseWriter, r *http.Request, orgID, token, route string) bool {
 	if !h.svc.HasLimiter() {
 		return true
 	}
-	key := ratelimit.KeyForOrg(orgID, route)
-	if key == "" {
-		return true
-	}
-	decision, err := h.svc.CheckKeyLimit(r.Context(), key, domain.OrgRoutePolicy(route))
-	if err != nil {
-		writeLimitError(w, err)
-		return false
-	}
-	setRateLimitHeaders(w, decision)
-	return true
+	return h.consume(w, r, orgCallerKey(orgID, token, route), domain.OrgRoutePolicy(route))
 }
 
 func (h *handlers) signup(w http.ResponseWriter, r *http.Request) {
@@ -454,7 +494,7 @@ func (h *handlers) selectOrg(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	if !h.checkOrgLimit(w, r, body.OrgID, routeSessionOrg) {
+	if !h.checkOrgLimit(w, r, body.OrgID, token, routeSessionOrg) {
 		return
 	}
 	tokens, err := h.svc.SelectOrg(r.Context(), body.OrgID, body.RefreshToken, token)

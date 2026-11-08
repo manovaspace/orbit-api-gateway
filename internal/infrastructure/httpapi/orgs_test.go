@@ -633,7 +633,7 @@ func TestRouteRateLimitsUseIPAndOrgBuckets(t *testing.T) {
 		}
 	})
 
-	t.Run("org route is per organization", func(t *testing.T) {
+	t.Run("org route is per IP then per caller and organization", func(t *testing.T) {
 		limiter := &recordingLimiter{allow: true}
 		stub := &orgSignupStub{}
 		base := newOrgSignupEnv(t, stub, limiter)
@@ -642,12 +642,52 @@ func TestRouteRateLimitsUseIPAndOrgBuckets(t *testing.T) {
 		if got.Status != http.StatusOK {
 			t.Fatalf("status = %d", got.Status)
 		}
-		want := ratelimit.KeyForOrg("org-1", routeOrgMembers)
-		if len(limiter.keys) != 1 || limiter.keys[0] != want {
-			t.Fatalf("limiter keys = %v, want %q", limiter.keys, want)
+		wantIP := ratelimit.KeyForIP("127.0.0.1", routeOrgMembers)
+		wantOrg := orgCallerKey("org-1", testAccessToken, routeOrgMembers)
+		if len(limiter.keys) != 2 || limiter.keys[0] != wantIP || limiter.keys[1] != wantOrg {
+			t.Fatalf("limiter keys = %v, want [%q %q]", limiter.keys, wantIP, wantOrg)
 		}
-		if limiter.policies[0] != domain.OrgRoutePolicy(routeOrgMembers) {
-			t.Fatalf("policy = %+v", limiter.policies[0])
+		if limiter.policies[0] != domain.IPRoutePolicy(routeOrgMembers, domain.OrgRouteIPLimit) {
+			t.Fatalf("ip policy = %+v", limiter.policies[0])
+		}
+		if limiter.policies[1] != domain.OrgRoutePolicy(routeOrgMembers) {
+			t.Fatalf("org policy = %+v", limiter.policies[1])
+		}
+	})
+
+	t.Run("unauthenticated org request does not touch the org bucket", func(t *testing.T) {
+		limiter := &recordingLimiter{allow: true}
+		stub := &orgSignupStub{}
+		base := newOrgSignupEnv(t, stub, limiter)
+
+		got := send(t, base, http.MethodGet, "/api/v1/orgs/org-1/members", "", nil)
+		if got.Status != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want 401", got.Status)
+		}
+		want := ratelimit.KeyForIP("127.0.0.1", routeOrgMembers)
+		if len(limiter.keys) != 1 || limiter.keys[0] != want {
+			t.Fatalf("limiter keys = %v, want only %q", limiter.keys, want)
+		}
+	})
+
+	t.Run("two callers get separate org buckets", func(t *testing.T) {
+		stub := &orgSignupStub{}
+		base := newOrgSignupEnv(t, stub, ratelimit.New(ratelimiting.NewMemoryLimiter()))
+		attacker := map[string]string{"Authorization": "Bearer attacker-token"}
+
+		for i := 0; i < domain.OrgRouteLimit; i++ {
+			got := send(t, base, http.MethodGet, "/api/v1/orgs/org-1/members", "", attacker)
+			if got.Status != http.StatusOK {
+				t.Fatalf("attacker request %d status = %d, want 200", i+1, got.Status)
+			}
+		}
+		got := send(t, base, http.MethodGet, "/api/v1/orgs/org-1/members", "", attacker)
+		if got.Status != http.StatusTooManyRequests {
+			t.Fatalf("attacker status = %d, want 429", got.Status)
+		}
+		got = send(t, base, http.MethodGet, "/api/v1/orgs/org-1/members", "", bearer())
+		if got.Status != http.StatusOK {
+			t.Fatalf("legitimate caller status = %d, want 200", got.Status)
 		}
 	})
 
@@ -678,9 +718,13 @@ func TestRouteRateLimitsUseIPAndOrgBuckets(t *testing.T) {
 		if got.Status != http.StatusOK {
 			t.Fatalf("status = %d", got.Status)
 		}
-		want := ratelimit.KeyForOrg("org-9", routeSessionOrg)
-		if len(limiter.keys) != 1 || limiter.keys[0] != want {
-			t.Fatalf("limiter keys = %v, want %q", limiter.keys, want)
+		wantIP := ratelimit.KeyForIP("127.0.0.1", routeSessionOrg)
+		want := orgCallerKey("org-9", testAccessToken, routeSessionOrg)
+		if len(limiter.keys) != 2 || limiter.keys[0] != wantIP || limiter.keys[1] != want {
+			t.Fatalf("limiter keys = %v, want [%q %q]", limiter.keys, wantIP, want)
+		}
+		if limiter.policies[0] != domain.IPRoutePolicy(routeSessionOrg, domain.OrgRouteIPLimit) {
+			t.Fatalf("ip policy = %+v", limiter.policies[0])
 		}
 	})
 }
