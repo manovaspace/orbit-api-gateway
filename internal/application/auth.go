@@ -56,6 +56,11 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (domain
 	return s.auth.RefreshToken(ctx, refreshToken)
 }
 
+// RevokeRefreshToken revokes a refresh token. Revocation is idempotent upstream.
+func (s *Service) RevokeRefreshToken(ctx context.Context, refreshToken string) error {
+	return s.auth.RevokeRefreshToken(ctx, refreshToken)
+}
+
 // ValidateAPIToken validates an oat_ API token and returns its identity.
 func (s *Service) ValidateAPIToken(ctx context.Context, secret string) (domain.APIIdentity, error) {
 	return s.auth.ValidateAPIToken(ctx, secret)

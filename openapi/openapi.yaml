@@ -175,6 +175,46 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/auth/token/revoke:
+    post:
+      operationId: authTokenRevoke
+      summary: Revoke refresh token
+      description: >
+        Idempotent. Unknown, revoked, expired or empty refresh tokens also return 204,
+        so the response never reveals whether a token was valid.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token:
+                  type: string
+                  writeOnly: true
+      responses:
+        "204":
+          description: Token revoked, or already unknown, revoked or expired
+        "400":
+          description: Malformed JSON body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          description: Upstream store failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /api/v1/system/ownership/challenge:
     post:
       operationId: systemOwnershipChallenge

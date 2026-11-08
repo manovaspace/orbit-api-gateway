@@ -262,6 +262,13 @@ func (contractUpstream) RefreshToken(_ context.Context, in *authv1.RefreshTokenR
 	return &authv1.TokenResponse{AccessToken: "access2", RefreshToken: "refresh2", ExpiresAt: "2026-08-30T23:00:00Z"}, nil
 }
 
+func (contractUpstream) RevokeRefreshToken(_ context.Context, in *authv1.RevokeRefreshTokenRequest) (*authv1.RevokeRefreshTokenResponse, error) {
+	if in.GetRefreshToken() == "boom" {
+		return nil, errors.New("store unavailable")
+	}
+	return &authv1.RevokeRefreshTokenResponse{}, nil
+}
+
 func (contractUpstream) ValidateApiToken(_ context.Context, in *authv1.ValidateApiTokenRequest) (*authv1.ValidateApiTokenResponse, error) {
 	if in.GetSecret() != "oat_ok" {
 		return nil, errors.New("invalid token")

@@ -31,6 +31,7 @@ HTTP runs on **Fiber v3** fronting the same `net/http` handlers as before, so ro
 | `GET` | `/.well-known/jwks.json` | Public access-token keys from `JWT_PUBLIC_KEYS_DIR` |
 | `POST` | `/api/v1/auth/login` | Proxies to `orbit-auth` `LoginWithPassword` (`identifier`: email or E.164 mobile; `email` deprecated) |
 | `POST` | `/api/v1/auth/token/refresh` | Proxies to `orbit-auth` `RefreshToken` |
+| `POST` | `/api/v1/auth/token/revoke` | Proxies to `orbit-auth` `RevokeRefreshToken`; idempotent, answers 204 |
 | `POST` | `/api/v1/auth/signup` | Proxies to `orbit-auth` `SignupService.RegisterWithEmail`. Unauthenticated; same 202 for new and existing addresses; disabled sign-up answers 404 |
 | `POST` | `/api/v1/auth/signup/verify` | Proxies to `orbit-auth` `SignupService.VerifySignup`; returns a token pair |
 | `GET` | `/api/v1/orgs` | Proxies to `orbit-auth` `OrgService.ListMyOrgs` (bearer access token) |

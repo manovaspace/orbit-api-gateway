@@ -49,6 +49,13 @@ func (s upstreamStub) RefreshToken(context.Context, *authv1.RefreshTokenRequest)
 	return &authv1.TokenResponse{AccessToken: "access2", RefreshToken: "refresh2", ExpiresAt: "e"}, nil
 }
 
+func (s upstreamStub) RevokeRefreshToken(context.Context, *authv1.RevokeRefreshTokenRequest) (*authv1.RevokeRefreshTokenResponse, error) {
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &authv1.RevokeRefreshTokenResponse{}, nil
+}
+
 func (s upstreamStub) ValidateApiToken(_ context.Context, in *authv1.ValidateApiTokenRequest) (*authv1.ValidateApiTokenResponse, error) {
 	if s.err != nil {
 		return nil, s.err
@@ -92,9 +99,21 @@ func TestCallsSucceedThroughTheAdapter(t *testing.T) {
 	if pair, err := client.RefreshToken(ctx, "refresh-token"); err != nil || pair.AccessToken != "access2" {
 		t.Fatalf("RefreshToken = %+v, %v", pair, err)
 	}
+	if err := client.RevokeRefreshToken(ctx, "refresh-token"); err != nil {
+		t.Fatalf("RevokeRefreshToken = %v", err)
+	}
 	identity, err := client.ValidateAPIToken(ctx, "oat_x")
 	if err != nil || identity.UserID != "user-oat_x" || len(identity.Scopes) != 1 {
 		t.Fatalf("ValidateAPIToken = %+v, %v", identity, err)
+	}
+}
+
+func TestRevokeRefreshTokenMapsUpstreamFailure(t *testing.T) {
+	client := dialStub(t, status.Error(codes.Internal, "pg: connection reset"))
+	err := client.RevokeRefreshToken(context.Background(), "refresh-token")
+	failure, ok := domain.AsError(err)
+	if !ok || failure.Kind != domain.KindInternal || failure.Message != "upstream error" {
+		t.Fatalf("RevokeRefreshToken err = %v, want internal upstream error", err)
 	}
 }
 
