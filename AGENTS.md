@@ -33,7 +33,7 @@ Three paths are deliberately absent: no Postgres (so no migrations, no sqlc and 
 
 Public HTTP is **OpenAPI-first**. Commit the OpenAPI artifact under `openapi/`; serve it at `/api/v1/openapi/gateway.yaml`. Scalar handbook/infra embedding is **planned** — do not hand-maintain endpoint tables.
 
-The spec includes stable `operationId` values for every operation (`authLogin`, `authOtpRequest`, `authOtpVerify`, `authTokenRefresh`, `authSignup`, `authSignupVerify`, `orgList`, `orgCreate`, `orgMembersList`, `orgMemberAdd`, `orgMemberRemove`, `orgMemberSuspend`, `orgMemberRoleSet`, `orgSlugSet`, `tenantResolve`, `orgInviteCreate`, `orgInviteList`, `orgInviteRevoke`, `inviteAccept`, `sessionSelectOrg`) and shared schemas (`TokenPair`, `OtpRequestResponse`, `ErrorEnvelope`). **Do not rename operationIds** without coordinating `@orbit/contracts` codegen in orbit-frontend (vendor + regenerate).
+The spec includes stable `operationId` values for every operation (`authLogin`, `authOtpRequest`, `authOtpVerify`, `authTokenRefresh`, `authSignup`, `authSignupVerify`, `orgList`, `orgCreate`, `orgMembersList`, `orgMemberAdd`, `orgMemberRemove`, `orgMemberSuspend`, `orgMemberRoleSet`, `orgSlugSet`, `tenantResolve`, `orgInviteCreate`, `orgInviteList`, `orgInviteRevoke`, `inviteAccept`, `invitePreview`, `inviteAcceptSignup`, `sessionSelectOrg`) and shared schemas (`TokenPair`, `OtpRequestResponse`, `ErrorEnvelope`). **Do not rename operationIds** without coordinating `@orbit/contracts` codegen in orbit-frontend (vendor + regenerate).
 
 `internal/infrastructure/httpapi/openapi_test.go` parses the YAML and asserts path/method/`operationId` parity with `platformOpenAPIRoutes` (keep that table aligned with `New` auth registrations).
 
@@ -65,10 +65,12 @@ Agent routing: `openapi` / `orbit-api-gateway` in `handbook/cursor/agent-routing
 | `PUT` | `/api/v1/orgs/{org_id}/members/{user_id}/role` | Upstream `orbit-auth` `OrgService.SetMemberRole` (`role`: `owner`, `admin`, `member`); only an owner grants `owner` or `admin` |
 | `PUT` | `/api/v1/orgs/{org_id}/slug` | Upstream `orbit-auth` `OrgService.SetOrgSlug` (`slug`); owner only. The old slug stays reserved and resolves |
 | `GET` | `/api/v1/public/tenants/{slug}` | **Public.** Upstream `orbit-auth` `TenantService.ResolveTenant`; returns `org_id`, `slug`, `name`, `retired` only; cacheable 30 s; 404 for an unknown slug |
-| `POST` | `/api/v1/orgs/{org_id}/invites` | Upstream `orbit-auth` OrgService InviteMember (`email`); owner or admin only, else 403 |
+| `POST` | `/api/v1/orgs/{org_id}/invites` | Upstream `orbit-auth` OrgService InviteMember (`email` or `phone`, optional `role`); a phone invitation returns its raw `token` once; owner or admin only, else 403 |
 | `GET` | `/api/v1/orgs/{org_id}/invites` | Upstream `orbit-auth` OrgService ListInvites |
 | `DELETE` | `/api/v1/orgs/{org_id}/invites/{invite_id}` | Upstream `orbit-auth` OrgService RevokeInvite |
 | `POST` | `/api/v1/invites/accept` | Upstream `orbit-auth` OrgService AcceptInvite (`token`) |
+| `POST` | `/api/v1/public/invites/preview` | **Public.** Upstream `orbit-auth` InviteService GetInvitePreview (`token` in the JSON body, never the URL); returns `org_id`, `org_name`, `org_slug`, `role`, `expires_at` only, never the recipient; unknown, expired or not pending is 404; `Cache-Control: no-store`; per-IP budget 20 a minute |
+| `POST` | `/api/v1/public/invites/accept` | **Public.** Upstream `orbit-auth` InviteService AcceptInviteWithSignup (`token`, `password`, `display_name` in the JSON body); phone invitations only; 201 `{user_id, org_id}`; 409 `account_exists`; 403 when sign-up is disabled; per-IP budget 5 a minute |
 | `POST` | `/api/v1/session/org` | Upstream `orbit-auth` OrgService SelectOrg (`org_id`, `refresh_token`); returns `TokenPair` |
 | `POST` | `/api/v1/system/ownership/challenge` | In-memory 6-digit OTP (10m TTL). **Does not send email.** Alias: `/api/v1/admin/challenge` |
 | `POST` | `/api/v1/system/ownership/verify` | Verify in-memory code; fingerprint is not a signing secret. Alias: `/api/v1/admin/verify` |

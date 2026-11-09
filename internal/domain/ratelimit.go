@@ -33,6 +33,11 @@ const (
 	// invitation.
 	SignupIPLimit       = 5
 	InviteAcceptIPLimit = 5
+	// InvitePreviewIPLimit is the per-IP budget for previewing an invitation
+	// before sign-in. InviteSignupAcceptIPLimit is the stricter per-IP budget for
+	// accepting a phone invitation, which creates an account.
+	InvitePreviewIPLimit      = 20
+	InviteSignupAcceptIPLimit = 5
 	// TenantResolveIPLimit is the per-IP budget for the public tenant lookup the
 	// edge makes before anyone signs in. It is generous because the caller is
 	// usually the web edge, whose egress addresses are few and shared by every

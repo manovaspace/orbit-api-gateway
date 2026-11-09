@@ -1156,14 +1156,132 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/public/invites/preview:
+    post:
+      operationId: invitePreview
+      summary: Preview an invitation before signing in
+      description: >
+        Public: the invitee has no session yet when they open the invitation link.
+        The token travels in the JSON body, never in the URL. The answer shows the
+        organization, its tier and the expiry, and never the recipient's email
+        address or phone number. An unknown, expired or no longer pending token gets
+        the same 404. The token is a bearer secret, so the answer is never cached.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvitePreviewRequest"
+      responses:
+        "200":
+          description: Invitation found and pending
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitePreview"
+        "400":
+          description: Invalid JSON, or the token is missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Invitation not found, expired or no longer pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/public/invites/accept:
+    post:
+      operationId: inviteAcceptSignup
+      summary: Accept a phone invitation by creating the account
+      description: >
+        Public. The token travels in the JSON body, never in the URL. Creates the
+        account for a phone invitation, sets its password and display name, and joins
+        the organization with the invited tier. The account's mobile number is the
+        invited number and is not verified. If an account already uses the number the
+        answer is 409 `account_exists`: that person signs in and accepts with
+        POST /api/v1/invites/accept instead. Email invitations are not accepted here.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteSignupRequest"
+      responses:
+        "201":
+          description: Account created and organization joined
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InviteSignupAccepted"
+        "400":
+          description: Invalid JSON, the token or password is missing, or the password is shorter than 8 characters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Invite sign-up is disabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Invitation not found, expired or no longer pending
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: An account already uses the invited number; the person signs in and calls POST /api/v1/invites/accept
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /api/v1/orgs/{org_id}/invites:
     post:
       operationId: orgInviteCreate
-      summary: Invite an email address to an organization
+      summary: Invite an email address or a phone number to an organization
       description: >
-        Creates or rotates a pending invitation and sends the org_invite email
-        through orbit-notifications. The caller must be an active owner or
-        admin of the organization; any other member gets 403.
+        Creates or rotates a pending invitation. Exactly one of `email` and
+        `phone` is required. An email invitation sends the org_invite email
+        through orbit-notifications. A phone invitation sends nothing yet: the
+        response carries the raw invitation `token` once, for the inviter to share
+        with the invitee. `role` is the tier the invitee receives and defaults to
+        `member`. The caller must be an active owner or admin of the organization;
+        any other member gets 403.
       parameters:
         - name: org_id
           in: path
@@ -1177,20 +1295,31 @@ paths:
           application/json:
             schema:
               type: object
-              required: [email]
+              oneOf:
+                - required: [email]
+                - required: [phone]
               properties:
                 email:
                   type: string
                   format: email
+                  description: Recipient email address. Set this or `phone`, not both.
+                phone:
+                  type: string
+                  description: Recipient phone number in E.164 form. Set this or `email`, not both.
+                role:
+                  type: string
+                  enum: [owner, admin, member]
+                  default: member
+                  description: Only an owner can grant owner or admin.
       responses:
         "200":
           description: Invitation created or rotated
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InviteEnvelope"
+                $ref: "#/components/schemas/InviteCreated"
         "400":
-          description: Invalid organization id or email
+          description: Invalid organization id, not exactly one of email and phone, or an invalid role
           content:
             application/json:
               schema:
@@ -1234,7 +1363,7 @@ paths:
     get:
       operationId: orgInviteList
       summary: List an organization's invitations
-      description: Invitation tokens are never returned.
+      description: Owners and admins only. Invitation tokens are never returned.
       parameters:
         - name: org_id
           in: path
@@ -1698,7 +1827,14 @@ components:
           format: uuid
         email:
           type: string
-          format: email
+          description: Recipient email address. Empty for a phone invitation.
+        phone:
+          type: string
+          description: Recipient phone number in E.164 form. Present only for a phone invitation.
+        role:
+          type: string
+          enum: [owner, admin, member]
+          description: Organization tier the invitee receives. Omitted when unknown.
         inviter_id:
           type: string
           format: uuid
@@ -1721,6 +1857,82 @@ components:
       properties:
         invite:
           $ref: "#/components/schemas/Invite"
+    InviteCreated:
+      type: object
+      required:
+        - invite
+      properties:
+        invite:
+          $ref: "#/components/schemas/Invite"
+        token:
+          type: string
+          description: >
+            The raw invitation token. Returned only for a phone invitation, and only
+            by this response, so share it with the invitee now; it is never returned
+            again.
+    InvitePreviewRequest:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          format: password
+          writeOnly: true
+          description: Bearer secret, never log.
+    InviteSignupRequest:
+      type: object
+      required:
+        - token
+        - password
+      properties:
+        token:
+          type: string
+          format: password
+          writeOnly: true
+          description: Bearer secret, never log.
+        password:
+          type: string
+          format: password
+          writeOnly: true
+          minLength: 8
+          description: At least 8 characters. A shorter password is 400.
+        display_name:
+          type: string
+    InvitePreview:
+      type: object
+      required:
+        - org_id
+        - org_name
+        - org_slug
+        - role
+        - expires_at
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        org_name:
+          type: string
+        org_slug:
+          type: string
+        role:
+          type: string
+          enum: [owner, admin, member]
+        expires_at:
+          type: string
+          format: date-time
+    InviteSignupAccepted:
+      type: object
+      required:
+        - user_id
+        - org_id
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        org_id:
+          type: string
+          format: uuid
     InviteList:
       type: object
       required:

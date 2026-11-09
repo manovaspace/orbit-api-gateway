@@ -65,9 +65,14 @@ func (s *Service) SetMemberRole(ctx context.Context, orgID, userID, role, access
 	return s.orgs.SetMemberRole(ctx, orgID, userID, role, accessToken)
 }
 
-// InviteMember creates or rotates an organization invitation.
-func (s *Service) InviteMember(ctx context.Context, orgID, email, accessToken string) (domain.Invite, error) {
-	return s.orgs.InviteMember(ctx, orgID, email, accessToken)
+// InviteMember creates or rotates an organization invitation to an email address
+// or a phone number. The request is checked here, before orbit-auth sees it.
+func (s *Service) InviteMember(ctx context.Context, in domain.InviteRequest, accessToken string) (domain.CreatedInvite, error) {
+	normalized, err := domain.NormalizeInviteRequest(in)
+	if err != nil {
+		return domain.CreatedInvite{}, err
+	}
+	return s.orgs.InviteMember(ctx, normalized, accessToken)
 }
 
 // AcceptInvite consumes an invitation token for the authenticated caller.

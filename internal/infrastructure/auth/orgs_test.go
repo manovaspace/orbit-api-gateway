@@ -18,8 +18,12 @@ type orgSignupStub struct {
 	authv1.UnimplementedOrgServiceServer
 	authv1.UnimplementedTenantServiceServer
 	authv1.UnimplementedSignupServiceServer
+	authv1.UnimplementedInviteServiceServer
 	err           error
 	authorization string
+	inviteReq     *authv1.InviteMemberRequest
+	signupReq     *authv1.AcceptInviteWithSignupRequest
+	previewToken  string
 }
 
 func (s *orgSignupStub) record(ctx context.Context) error {
@@ -89,7 +93,28 @@ func (s *orgSignupStub) InviteMember(ctx context.Context, in *authv1.InviteMembe
 	if err := s.record(ctx); err != nil {
 		return nil, err
 	}
-	return &authv1.InviteMemberResponse{Invite: &authv1.Invite{Id: "invite-1", OrgId: in.GetOrgId(), Email: in.GetEmail()}}, nil
+	s.inviteReq = in
+	invite := &authv1.Invite{Id: "invite-1", OrgId: in.GetOrgId(), Email: in.GetEmail(), Phone: in.GetPhone(), Role: in.GetRole()}
+	if in.GetPhone() != "" {
+		return &authv1.InviteMemberResponse{Invite: invite, Token: "raw-phone-token"}, nil
+	}
+	return &authv1.InviteMemberResponse{Invite: invite}, nil
+}
+
+func (s *orgSignupStub) GetInvitePreview(ctx context.Context, in *authv1.GetInvitePreviewRequest) (*authv1.InvitePreview, error) {
+	s.previewToken = in.GetToken()
+	if err := s.record(ctx); err != nil {
+		return nil, err
+	}
+	return &authv1.InvitePreview{OrgId: "org-1", OrgName: "Acme", OrgSlug: "acme", Role: "admin", ExpiresAt: "2026-11-09T10:00:00Z"}, nil
+}
+
+func (s *orgSignupStub) AcceptInviteWithSignup(ctx context.Context, in *authv1.AcceptInviteWithSignupRequest) (*authv1.AcceptInviteWithSignupResponse, error) {
+	s.signupReq = in
+	if err := s.record(ctx); err != nil {
+		return nil, err
+	}
+	return &authv1.AcceptInviteWithSignupResponse{UserId: "user-9", OrgId: "org-1"}, nil
 }
 
 func (s *orgSignupStub) AcceptInvite(ctx context.Context, in *authv1.AcceptInviteRequest) (*authv1.AcceptInviteResponse, error) {
@@ -142,6 +167,7 @@ func dialOrgStub(t *testing.T, err error) (*Client, *orgSignupStub) {
 	authv1.RegisterOrgServiceServer(gs, stub)
 	authv1.RegisterTenantServiceServer(gs, stub)
 	authv1.RegisterSignupServiceServer(gs, stub)
+	authv1.RegisterInviteServiceServer(gs, stub)
 	go func() { _ = gs.Serve(listener) }()
 	t.Cleanup(gs.Stop)
 
@@ -193,9 +219,9 @@ func TestOrgAndSignupCallsForwardTheBearerAndMapTheirTypes(t *testing.T) {
 	if err != nil || tenant.OrgID != "org-1" || tenant.Slug != "acme" || !tenant.Retired {
 		t.Fatalf("ResolveTenant = %+v, %v", tenant, err)
 	}
-	invite, err := client.InviteMember(ctx, "org-1", "person@example.com", "token-1")
-	if err != nil || invite.Email != "person@example.com" {
-		t.Fatalf("InviteMember = %+v, %v", invite, err)
+	created, err := client.InviteMember(ctx, domain.InviteRequest{OrgID: "org-1", Email: "person@example.com"}, "token-1")
+	if err != nil || created.Invite.Email != "person@example.com" || created.Token != "" {
+		t.Fatalf("InviteMember = %+v, %v", created, err)
 	}
 	accepted, err := client.AcceptInvite(ctx, "secret", "token-1")
 	if err != nil || accepted.ID != "invite-secret" {
