@@ -184,13 +184,13 @@ func spanText(span sdktrace.ReadOnlySpan) string {
 	for _, kv := range span.Attributes() {
 		b.WriteString(string(kv.Key))
 		b.WriteString("=")
-		b.WriteString(kv.Value.Emit())
+		b.WriteString(kv.Value.String())
 		b.WriteString("\n")
 	}
 	for _, event := range span.Events() {
 		b.WriteString(event.Name)
 		for _, kv := range event.Attributes {
-			b.WriteString(kv.Value.Emit())
+			b.WriteString(kv.Value.String())
 		}
 	}
 	return b.String()
@@ -560,7 +560,7 @@ func TestPublicInviteTokenNeverReachesLogsSpansOrLimiterKeys(t *testing.T) {
 		_ = provider.Shutdown(context.Background())
 	})
 
-	logger := func(msg string, args ...any) { fmt.Fprintln(&out, msg, args) }
+	logger := func(msg string, args ...any) { _, _ = fmt.Fprintln(&out, msg, args) }
 	limiter := &recordingLimiter{allow: true}
 	// The provider is set before the server is built: the observability middleware
 	// reads the global provider when it is constructed.
