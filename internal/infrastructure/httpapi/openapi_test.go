@@ -35,6 +35,8 @@ var platformOpenAPIRoutes = []struct {
 	{"get", "/api/v1/orgs/{org_id}/invites", "orgInviteList"},
 	{"delete", "/api/v1/orgs/{org_id}/invites/{invite_id}", "orgInviteRevoke"},
 	{"post", "/api/v1/invites/accept", "inviteAccept"},
+	{"post", "/api/v1/public/invites/preview", "invitePreview"},
+	{"post", "/api/v1/public/invites/accept", "inviteAcceptSignup"},
 	{"post", "/api/v1/session/org", "sessionSelectOrg"},
 	{"post", "/api/v1/system/ownership/challenge", "systemOwnershipChallenge"},
 	{"post", "/api/v1/system/ownership/verify", "systemOwnershipVerify"},

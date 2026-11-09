@@ -17,6 +17,7 @@ type Deps struct {
 	Orgs       domain.OrgService
 	Signup     domain.SignupService
 	Tenants    domain.TenantService
+	Invites    domain.InviteService
 	Flags      domain.FlagSource
 	Limiter    domain.Limiter
 	Clock      domain.Clock
@@ -35,6 +36,7 @@ type Service struct {
 	orgs       domain.OrgService
 	signup     domain.SignupService
 	tenants    domain.TenantService
+	invites    domain.InviteService
 	flags      domain.FlagSource
 	limiter    domain.Limiter
 	clock      domain.Clock
@@ -57,6 +59,7 @@ func NewService(deps Deps) *Service {
 		orgs:       deps.Orgs,
 		signup:     deps.Signup,
 		tenants:    deps.Tenants,
+		invites:    deps.Invites,
 		flags:      deps.Flags,
 		limiter:    deps.Limiter,
 		clock:      deps.Clock,
@@ -81,6 +84,10 @@ func (s *Service) HasTenants() bool { return s.tenants != nil }
 
 // HasSignup reports whether the upstream sign-up port is wired.
 func (s *Service) HasSignup() bool { return s.signup != nil }
+
+// HasInvites reports whether the public invitation port is wired. Without it the
+// edge does not register the public invitation routes.
+func (s *Service) HasInvites() bool { return s.invites != nil }
 
 // HasFlags reports whether the upstream flag source is wired.
 func (s *Service) HasFlags() bool { return s.flags != nil }

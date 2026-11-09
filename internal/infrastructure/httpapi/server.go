@@ -110,6 +110,15 @@ func New(svc *application.Service, opts Options) *Server {
 		mux.HandleFunc("GET "+routeTenantResolve, h.wrapIP(routeTenantResolve, domain.TenantResolveIPLimit, h.resolveTenant))
 	}
 
+	// Public invitation routes. The invitee has no session yet, so the token in the
+	// JSON body is the only credential; it never appears in a URL. Accepting creates
+	// an account, so its per-IP budget is the stricter one.
+	if svc.HasInvites() {
+		for _, route := range h.publicInviteRoutes() {
+			mux.HandleFunc(route.method+" "+route.template, h.wrapIP(route.template, route.budget, route.handler))
+		}
+	}
+
 	// Canonical System & Infrastructure Plane (Platform Ownership).
 	mux.HandleFunc("POST /api/v1/system/ownership/challenge", wrap(domain.ClassOwnershipChallenge, h.challenge))
 	mux.HandleFunc("POST /api/v1/system/ownership/verify", wrap(domain.ClassOwnershipVerify, h.verifyChallenge))

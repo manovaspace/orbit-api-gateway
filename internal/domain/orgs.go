@@ -1,6 +1,9 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 // Organization is one tenant returned by orbit-auth.
 type Organization struct {
@@ -23,16 +26,66 @@ type Membership struct {
 	UpdatedAt string
 }
 
-// Invite is an organization invitation without its secret token.
+// Organization administration tiers. A membership and an invitation both carry
+// one of them.
+const (
+	RoleOwner  = "owner"
+	RoleAdmin  = "admin"
+	RoleMember = "member"
+)
+
+// Invite is an organization invitation without its secret token. Exactly one of
+// Email and Phone is set.
 type Invite struct {
 	ID         string
 	OrgID      string
 	Email      string
+	Phone      string
+	Role       string
 	InviterID  string
 	Status     string
 	ExpiresAt  string
 	AcceptedAt string
 	CreatedAt  string
+}
+
+// InviteRequest is one invitation to an email address or a phone number. Exactly
+// one of Email and Phone is set. Role is owner, admin or member; empty means
+// member.
+type InviteRequest struct {
+	OrgID string
+	Email string
+	Phone string
+	Role  string
+}
+
+// CreatedInvite is the result of an invitation write. Token is the raw invitation
+// token. orbit-auth returns it only for a phone invitation, which has no email to
+// carry it, and it is empty otherwise. It is a bearer secret: it is never logged.
+type CreatedInvite struct {
+	Invite Invite
+	Token  string
+}
+
+// NormalizeInviteRequest checks an invitation request before orbit-auth sees it.
+// Surrounding spaces are trimmed, exactly one of Email and Phone must remain, and
+// an empty role becomes member. Any role other than owner, admin or member is
+// refused.
+func NormalizeInviteRequest(in InviteRequest) (InviteRequest, error) {
+	in.Email = strings.TrimSpace(in.Email)
+	in.Phone = strings.TrimSpace(in.Phone)
+	if (in.Email == "") == (in.Phone == "") {
+		return InviteRequest{}, NewError(KindInvalidArgument, "set exactly one of email or phone")
+	}
+	in.Role = strings.TrimSpace(in.Role)
+	switch in.Role {
+	case "":
+		in.Role = RoleMember
+	case RoleOwner, RoleAdmin, RoleMember:
+	default:
+		return InviteRequest{}, NewError(KindInvalidArgument, "role must be owner, admin or member")
+	}
+	return in, nil
 }
 
 // OrgService is the organization and invitation port over orbit-auth's
@@ -47,7 +100,7 @@ type OrgService interface {
 	RemoveMember(ctx context.Context, orgID, userID, accessToken string) error
 	SuspendMember(ctx context.Context, orgID, userID, accessToken string) error
 	SetMemberRole(ctx context.Context, orgID, userID, role, accessToken string) (Membership, error)
-	InviteMember(ctx context.Context, orgID, email, accessToken string) (Invite, error)
+	InviteMember(ctx context.Context, in InviteRequest, accessToken string) (CreatedInvite, error)
 	AcceptInvite(ctx context.Context, token, accessToken string) (Invite, error)
 	RevokeInvite(ctx context.Context, orgID, inviteID, accessToken string) error
 	ListInvites(ctx context.Context, orgID, accessToken string) ([]Invite, error)

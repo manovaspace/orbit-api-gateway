@@ -76,6 +76,8 @@ type membershipEnvelope struct {
 
 type inviteMemberBody struct {
 	Email string `json:"email"`
+	Phone string `json:"phone"`
+	Role  string `json:"role"`
 }
 
 type acceptInviteBody struct {
@@ -124,6 +126,8 @@ type inviteJSON struct {
 	ID         string `json:"id"`
 	OrgID      string `json:"org_id"`
 	Email      string `json:"email"`
+	Phone      string `json:"phone,omitempty"`
+	Role       string `json:"role,omitempty"`
 	InviterID  string `json:"inviter_id"`
 	Status     string `json:"status"`
 	ExpiresAt  string `json:"expires_at"`
@@ -133,6 +137,13 @@ type inviteJSON struct {
 
 type inviteEnvelope struct {
 	Invite inviteJSON `json:"invite"`
+}
+
+// inviteCreatedEnvelope answers an invitation write. Token is set only for a phone
+// invitation, and only by this response; it is omitted otherwise.
+type inviteCreatedEnvelope struct {
+	Invite inviteJSON `json:"invite"`
+	Token  string     `json:"token,omitempty"`
 }
 
 type inviteList struct {
@@ -435,12 +446,17 @@ func (h *handlers) createInvite(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	invite, err := h.svc.InviteMember(r.Context(), r.PathValue("org_id"), body.Email, token)
+	created, err := h.svc.InviteMember(r.Context(), domain.InviteRequest{
+		OrgID: r.PathValue("org_id"),
+		Email: body.Email,
+		Phone: body.Phone,
+		Role:  body.Role,
+	}, token)
 	if err != nil {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, inviteEnvelope{Invite: inviteJSONFrom(invite)})
+	writeJSON(w, http.StatusOK, inviteCreatedEnvelope{Invite: inviteJSONFrom(created.Invite), Token: created.Token})
 }
 
 func (h *handlers) listInvites(w http.ResponseWriter, r *http.Request) {
@@ -547,6 +563,8 @@ func inviteJSONFrom(invite domain.Invite) inviteJSON {
 		ID:         invite.ID,
 		OrgID:      invite.OrgID,
 		Email:      invite.Email,
+		Phone:      invite.Phone,
+		Role:       invite.Role,
 		InviterID:  invite.InviterID,
 		Status:     invite.Status,
 		ExpiresAt:  invite.ExpiresAt,

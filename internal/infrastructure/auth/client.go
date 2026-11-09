@@ -18,12 +18,14 @@ import (
 	"github.com/manovaspace/orbit-api-gateway/internal/domain"
 )
 
-// Client implements domain.AuthService, domain.OrgService, domain.SignupService
-// and domain.FlagSource over gRPC and orbit-auth's HTTP surface.
+// Client implements domain.AuthService, domain.OrgService, domain.TenantService,
+// domain.InviteService, domain.SignupService and domain.FlagSource over gRPC and
+// orbit-auth's HTTP surface.
 type Client struct {
 	api    authv1.AuthServiceClient
 	orgs   authv1.OrgServiceClient
 	tenant authv1.TenantServiceClient
+	invite authv1.InviteServiceClient
 	signup authv1.SignupServiceClient
 	conn   *grpc.ClientConn
 
@@ -37,6 +39,7 @@ var (
 	_ domain.AuthService   = (*Client)(nil)
 	_ domain.OrgService    = (*Client)(nil)
 	_ domain.TenantService = (*Client)(nil)
+	_ domain.InviteService = (*Client)(nil)
 	_ domain.SignupService = (*Client)(nil)
 	_ domain.FlagSource    = (*Client)(nil)
 )
@@ -53,6 +56,7 @@ func NewClient(addr string, opts ...grpc.DialOption) (*Client, error) {
 		api:        authv1.NewAuthServiceClient(conn),
 		orgs:       authv1.NewOrgServiceClient(conn),
 		tenant:     authv1.NewTenantServiceClient(conn),
+		invite:     authv1.NewInviteServiceClient(conn),
 		signup:     authv1.NewSignupServiceClient(conn),
 		conn:       conn,
 		httpClient: &http.Client{Timeout: 5 * time.Second},
@@ -247,16 +251,19 @@ func (c *Client) SetMemberRole(ctx context.Context, orgID, userID, role, accessT
 	return membership(resp.GetMembership()), nil
 }
 
-// InviteMember creates or rotates an organization invitation.
-func (c *Client) InviteMember(ctx context.Context, orgID, email, accessToken string) (domain.Invite, error) {
+// InviteMember creates or rotates an organization invitation to an email address
+// or a phone number. The raw token comes back only for a phone invitation.
+func (c *Client) InviteMember(ctx context.Context, in domain.InviteRequest, accessToken string) (domain.CreatedInvite, error) {
 	resp, err := c.orgs.InviteMember(callerContext(ctx, accessToken), &authv1.InviteMemberRequest{
-		OrgId: orgID,
-		Email: email,
+		OrgId: in.OrgID,
+		Email: in.Email,
+		Phone: in.Phone,
+		Role:  in.Role,
 	})
 	if err != nil {
-		return domain.Invite{}, orgUpstreamError(err)
+		return domain.CreatedInvite{}, orgUpstreamError(err)
 	}
-	return invite(resp.GetInvite()), nil
+	return domain.CreatedInvite{Invite: invite(resp.GetInvite()), Token: resp.GetToken()}, nil
 }
 
 // AcceptInvite consumes an invitation token for the authenticated caller.
@@ -300,6 +307,36 @@ func (c *Client) SelectOrg(ctx context.Context, orgID, refreshToken, accessToken
 		return domain.TokenPair{}, orgUpstreamError(err)
 	}
 	return tokenPair(resp.GetTokens()), nil
+}
+
+// GetInvitePreview shows what an invitation token grants. The token is the only
+// selector; every token that cannot be used is a not-found error.
+func (c *Client) GetInvitePreview(ctx context.Context, token string) (domain.InvitePreview, error) {
+	resp, err := c.invite.GetInvitePreview(ctx, &authv1.GetInvitePreviewRequest{Token: token})
+	if err != nil {
+		return domain.InvitePreview{}, invitePreviewUpstreamError(err)
+	}
+	return domain.InvitePreview{
+		OrgID:     resp.GetOrgId(),
+		OrgName:   resp.GetOrgName(),
+		OrgSlug:   resp.GetOrgSlug(),
+		Role:      resp.GetRole(),
+		ExpiresAt: resp.GetExpiresAt(),
+	}, nil
+}
+
+// AcceptInviteWithSignup creates the account for a phone invitation and joins its
+// organization.
+func (c *Client) AcceptInviteWithSignup(ctx context.Context, in domain.InviteSignup) (domain.InviteAcceptance, error) {
+	resp, err := c.invite.AcceptInviteWithSignup(ctx, &authv1.AcceptInviteWithSignupRequest{
+		Token:       in.Token,
+		Password:    in.Password,
+		DisplayName: in.DisplayName,
+	})
+	if err != nil {
+		return domain.InviteAcceptance{}, inviteSignupUpstreamError(err)
+	}
+	return domain.InviteAcceptance{UserID: resp.GetUserId(), OrgID: resp.GetOrgId()}, nil
 }
 
 // callerContext attaches the bearer access token the way orbit-auth's OrgService
@@ -366,6 +403,8 @@ func invite(in *authv1.Invite) domain.Invite {
 		ID:         in.GetId(),
 		OrgID:      in.GetOrgId(),
 		Email:      in.GetEmail(),
+		Phone:      in.GetPhone(),
+		Role:       in.GetRole(),
 		InviterID:  in.GetInviterId(),
 		Status:     in.GetStatus(),
 		ExpiresAt:  in.GetExpiresAt(),
@@ -439,4 +478,36 @@ func signupUpstreamError(err error) error {
 		return domain.NewError(domain.KindNotFound, "not found")
 	}
 	return orgUpstreamError(err)
+}
+
+// invitePreviewUpstreamError maps a failed preview. Every token that cannot be
+// used is the same NotFound, which the edge renders as 404; any other failure is
+// the generic upstream error.
+func invitePreviewUpstreamError(err error) error {
+	if st, ok := status.FromError(err); ok && st.Code() == codes.NotFound {
+		return domain.NewError(domain.KindNotFound, "invite not found")
+	}
+	return domain.NewError(domain.KindBadGateway, "upstream error")
+}
+
+// inviteSignupUpstreamError maps a failed phone-invitation sign-up. An account
+// that already uses the number is a conflict with the stable account_exists code;
+// disabled sign-up is forbidden; a weak password is invalid input; an unusable
+// token is not found. Any other failure is the generic upstream error.
+func inviteSignupUpstreamError(err error) error {
+	st, ok := status.FromError(err)
+	if !ok {
+		return domain.NewError(domain.KindBadGateway, "upstream error")
+	}
+	switch st.Code() {
+	case codes.NotFound:
+		return domain.NewError(domain.KindNotFound, "invite not found")
+	case codes.AlreadyExists:
+		return domain.NewError(domain.KindConflict, "account_exists")
+	case codes.FailedPrecondition:
+		return domain.NewError(domain.KindPermissionDenied, st.Message())
+	case codes.InvalidArgument:
+		return domain.NewError(domain.KindInvalidArgument, st.Message())
+	}
+	return domain.NewError(domain.KindBadGateway, "upstream error")
 }

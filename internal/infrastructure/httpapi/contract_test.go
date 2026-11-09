@@ -752,7 +752,7 @@ func jsonHeaders() map[string]string {
 // before the Fiber v3 migration.
 const (
 	installerDigest = "f87e363d4ac3ea888dfe28b4b713fbcf38268ef68226f9c02b4537933dafd926"
-	specDigest      = "d64d05df1464b0e78406d01f74eca9aacd462580333eca0515813d8c1194f1db"
+	specDigest      = "49fe1f91b4de5465052b6d3b0e768561cea43ece21e2c2c8b348f2c9274a9ece"
 	manifestDigest  = "52d4ee360e6f9693c042a1f2e95b0155b8e68f51178d43cd3726a595cd2517a6"
 
 	claimBodyFixture        = `{"status":"provisioned","idempotent_replay":false,"user":{"uid":"john","email":"john@example.com","display_name":"John Doe","groups":["dev","orbit"]},"credentials":{"forgejo_username":"john","forgejo_mcp_token":"%s","wireguard_config":"[Interface]\nPrivateKey = \u003cgenerated-client-key\u003e\nAddress = 10.42.0.53/32\nDNS = 10.42.0.1\n\n[Peer]\nPublicKey = 4gZ+examplePublicKeyOrbitGatewayVPNControllerKey=\nEndpoint = vpn.internal.manova.space:51820\nAllowedIPs = 10.42.0.0/16, 172.28.0.0/16\nPersistentKeepalive = 25"},"workspace":{"git_remote_base":"ssh://git@git.internal.manova.space:2222/manova","default_manifest_scope":"core"}}` + "\n"
