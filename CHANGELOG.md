@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0](https://github.com/manovaspace/orbit-api-gateway/compare/v0.9.0...v0.10.0) (2026-11-09)
+
+
+### Features
+
+* **invites:** phone invites and public invite preview and accept ([c55103e](https://github.com/manovaspace/orbit-api-gateway/commit/c55103ed4aac01e657f572d56682168407338905))
+* **invites:** phone invites and public invite preview and accept ([9c8dc66](https://github.com/manovaspace/orbit-api-gateway/commit/9c8dc661a768598a53a55568f7416d9a27d57dfc)), closes [#84](https://github.com/manovaspace/orbit-api-gateway/issues/84)
+
+
+### Bug Fixes
+
+* **invites:** satisfy golangci-lint in the invite tests ([e645c6d](https://github.com/manovaspace/orbit-api-gateway/commit/e645c6dcc8c29a39a74d353994dc612707c6425d))
+
 ## [0.9.0](https://github.com/manovaspace/orbit-api-gateway/compare/v0.8.1...v0.9.0) (2026-11-08)
 
 
