@@ -1,6 +1,6 @@
 module github.com/manovaspace/orbit-api-gateway
 
-go 1.27.3
+go 1.27.4
 
 require (
 	github.com/gofiber/fiber/v3 v3.7.0
@@ -33,6 +33,7 @@ require (
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/molecule-man/go-brrr v1.3.1 // indirect
 	github.com/philhofer/fwd v1.2.1 // indirect
+	github.com/shamaton/msgpack/v3 v3.2.8 // indirect
 	github.com/tinylib/msgp v1.6.5 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.78.0 // indirect
@@ -47,9 +48,9 @@ require (
 	go.opentelemetry.io/otel/trace v1.47.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.11.1 // indirect
 	go.uber.org/atomic v1.12.0 // indirect
-	golang.org/x/crypto v0.58.0 // indirect
+	golang.org/x/crypto v0.59.0 // indirect
 	golang.org/x/net v0.62.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/sys v0.50.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20261026165753-2ffab32bce7e // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261026165753-2ffab32bce7e // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
