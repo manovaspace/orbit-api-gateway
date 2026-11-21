@@ -23,7 +23,7 @@ import (
 
 	authv1 "github.com/manovaspace/orbit-auth/api/auth/v1"
 	orbittoken "github.com/manovaspace/orbit-auth/token"
-	ratelimiting "github.com/manovaspace/orbit-rate-limiting"
+	ratelimiting "github.com/manovaspace/orbit-kit/ratelimiting"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

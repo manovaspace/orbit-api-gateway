@@ -23,7 +23,7 @@ import (
 	"github.com/manovaspace/orbit-api-gateway/internal/infrastructure/ratelimit"
 	"github.com/manovaspace/orbit-api-gateway/internal/infrastructure/staffoidc"
 
-	ratelimiting "github.com/manovaspace/orbit-rate-limiting"
+	ratelimiting "github.com/manovaspace/orbit-kit/ratelimiting"
 )
 
 const (

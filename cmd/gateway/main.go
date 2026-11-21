@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	observability "github.com/manovaspace/orbit-observability"
-	ratelimiting "github.com/manovaspace/orbit-rate-limiting"
+	observability "github.com/manovaspace/orbit-kit/observability"
+	ratelimiting "github.com/manovaspace/orbit-kit/ratelimiting"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/manovaspace/orbit-api-gateway/internal/application"

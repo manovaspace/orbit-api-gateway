@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	ratelimiting "github.com/manovaspace/orbit-rate-limiting"
+	ratelimiting "github.com/manovaspace/orbit-kit/ratelimiting"
 	"go.opentelemetry.io/otel"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"

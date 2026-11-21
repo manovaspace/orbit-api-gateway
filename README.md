@@ -77,7 +77,7 @@ internal/infrastructure/
   ids/                              six-digit challenge codes
   jwks/                             public verification key document
   memory/                           in-process challenge and claim stores
-  ratelimit/                        orbit-rate-limiting adapter
+  ratelimit/                        orbit-kit/ratelimiting adapter
 ```
 
 The domain imports no infrastructure package. The application layer receives
