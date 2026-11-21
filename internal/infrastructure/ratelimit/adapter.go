@@ -1,11 +1,11 @@
-// Package ratelimit adapts the orbit-rate-limiting limiter (memory or Redis) to
+// Package ratelimit adapts the orbit-kit/ratelimiting limiter (memory or Redis) to
 // the domain rate-limit port.
 package ratelimit
 
 import (
 	"context"
 
-	ratelimiting "github.com/manovaspace/orbit-rate-limiting"
+	ratelimiting "github.com/manovaspace/orbit-kit/ratelimiting"
 
 	"github.com/manovaspace/orbit-api-gateway/internal/domain"
 )
@@ -43,7 +43,7 @@ func toLibraryPolicy(policy domain.Policy) ratelimiting.Policy {
 	return ratelimiting.Policy{Class: policy.Class, Limit: policy.Limit, Window: policy.Window}
 }
 
-// KeyForIP returns the per-IP, per-route bucket key from orbit-rate-limiting.
+// KeyForIP returns the per-IP, per-route bucket key from orbit-kit/ratelimiting.
 // An empty IP or route yields an empty key, which callers must not pass to the
 // limiter.
 func KeyForIP(ip, route string) string {
@@ -51,7 +51,7 @@ func KeyForIP(ip, route string) string {
 }
 
 // KeyForOrg returns the per-organization, per-route bucket key from
-// orbit-rate-limiting. An empty organization or route yields an empty key,
+// orbit-kit/ratelimiting. An empty organization or route yields an empty key,
 // which callers must not pass to the limiter.
 func KeyForOrg(orgID, route string) string {
 	return ratelimiting.KeyForOrg(orgID, route)

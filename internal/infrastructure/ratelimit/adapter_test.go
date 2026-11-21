@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
-	ratelimiting "github.com/manovaspace/orbit-rate-limiting"
+	ratelimiting "github.com/manovaspace/orbit-kit/ratelimiting"
 
 	"github.com/manovaspace/orbit-api-gateway/internal/domain"
 )
 
 // TestDomainPoliciesMatchTheLibrary pins the copied policy values to
-// orbit-rate-limiting, so a change there cannot silently drift the edge.
+// orbit-kit/ratelimiting, so a change there cannot silently drift the edge.
 func TestDomainPoliciesMatchTheLibrary(t *testing.T) {
 	library := ratelimiting.DefaultAuthPolicies()
 	if len(domain.DefaultAuthPolicies()) != len(library) {

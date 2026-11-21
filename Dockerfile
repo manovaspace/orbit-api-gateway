@@ -9,8 +9,6 @@ COPY . .
 ARG VERSION=dev
 RUN set -euo pipefail \
 	&& go mod edit -dropreplace=github.com/manovaspace/orbit-auth \
-	&& go mod edit -dropreplace=github.com/manovaspace/orbit-observability \
-	&& go mod edit -dropreplace=github.com/manovaspace/orbit-rate-limiting \
 	&& go mod download all \
 	&& CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /gateway ./cmd/gateway
 

@@ -16,7 +16,7 @@ Status: `beta`.
 
 - `internal/domain` — the edge's types and ports: `AuthService`, `OrgService`, `SignupService` (upstream orbit-auth), `Limiter`, `Clock`, `CodeGenerator`, `ChallengeStore`, `ClaimCache`, `Assets`. It imports no infrastructure package, HTTP framework, environment or proto.
 - `internal/application` — the auth, signup, organization, ownership, onboarding, static-asset and rate-limit use cases. It receives `application.Deps` and reads no environment variable.
-- `internal/infrastructure` — adapters: `httpapi` (Fiber v3 edge and health server), `auth` (orbit-auth gRPC), `ratelimit` (orbit-rate-limiting memory/Redis), `memory` (challenge and claim stores), `assets` (embedded installer, OpenAPI artifacts), `jwks`, `clock`, `ids`.
+- `internal/infrastructure` — adapters: `httpapi` (Fiber v3 edge and health server), `auth` (orbit-auth gRPC), `ratelimit` (orbit-kit/ratelimiting memory/Redis), `memory` (challenge and claim stores), `assets` (embedded installer, OpenAPI artifacts), `jwks`, `clock`, `ids`.
 - `cmd/gateway` — wiring only.
 - `.golangci.yml` `depguard` rules enforce both boundaries. Do not weaken them to land a change.
 
