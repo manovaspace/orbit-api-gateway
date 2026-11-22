@@ -107,6 +107,7 @@ type OrgService interface {
 	AddMember(ctx context.Context, orgID, userID, accessToken string) error
 	RemoveMember(ctx context.Context, orgID, userID, accessToken string) error
 	SuspendMember(ctx context.Context, orgID, userID, accessToken string) error
+	ReactivateMember(ctx context.Context, orgID, userID, accessToken string) error
 	SetMemberRole(ctx context.Context, orgID, userID, role, accessToken string) (Membership, error)
 	InviteMember(ctx context.Context, in InviteRequest, accessToken string) (CreatedInvite, error)
 	AcceptInvite(ctx context.Context, token, accessToken string) (Invite, error)

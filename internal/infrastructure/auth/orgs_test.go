@@ -78,6 +78,10 @@ func (s *orgSignupStub) RemoveMember(ctx context.Context, _ *authv1.RemoveMember
 	return &authv1.RemoveMemberResponse{}, s.record(ctx)
 }
 
+func (s *orgSignupStub) ReactivateMember(ctx context.Context, _ *authv1.ReactivateMemberRequest) (*authv1.ReactivateMemberResponse, error) {
+	return &authv1.ReactivateMemberResponse{}, s.record(ctx)
+}
+
 func (s *orgSignupStub) SuspendMember(ctx context.Context, _ *authv1.SuspendMemberRequest) (*authv1.SuspendMemberResponse, error) {
 	return &authv1.SuspendMemberResponse{}, s.record(ctx)
 }
@@ -206,6 +210,9 @@ func TestOrgAndSignupCallsForwardTheBearerAndMapTheirTypes(t *testing.T) {
 	}
 	if err := client.SuspendMember(ctx, "org-1", "user-2", "token-1"); err != nil {
 		t.Fatalf("SuspendMember = %v", err)
+	}
+	if err := client.ReactivateMember(ctx, "org-1", "user-2", "token-1"); err != nil {
+		t.Fatalf("ReactivateMember = %v", err)
 	}
 	changed, err := client.SetMemberRole(ctx, "org-1", "user-2", "admin", "token-1")
 	if err != nil || changed.Role != "admin" || changed.UserID != "user-2" {

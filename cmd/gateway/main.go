@@ -47,8 +47,10 @@ func main() {
 	// The staff routes exist only with a service token. The token is never logged.
 	authClient.StaffServiceToken = strings.TrimSpace(os.Getenv("AUTH_STAFF_SERVICE_TOKEN"))
 	var staffOrgs domain.StaffOrgService
+	var staffUsers domain.StaffUserService
 	if authClient.StaffServiceToken != "" {
 		staffOrgs = authClient
+		staffUsers = authClient
 	}
 
 	var limiter domain.Limiter
@@ -72,11 +74,13 @@ func main() {
 		Auth:       authClient,
 		Orgs:       authClient,
 		StaffOrgs:  staffOrgs,
+		StaffUsers: staffUsers,
 		Signup:     authClient,
 		Tenants:    authClient,
 		Invites:    authClient,
 		Google:     authClient,
 		Usernames:  authClient,
+		Accounts:   authClient,
 		Flags:      authClient,
 		Limiter:    limiter,
 		Clock:      clock.New(),

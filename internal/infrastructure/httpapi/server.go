@@ -80,6 +80,19 @@ func New(svc *application.Service, opts Options) *Server {
 		mux.HandleFunc("POST "+routeGoogleComplete, wrap(domain.ClassAuthGoogle, h.googleComplete))
 	}
 
+	// The caller's own sign-in methods (bearer token required). Each route forwards
+	// the token and orbit-auth acts on its subject. The Google-only routes answer
+	// 404 from the adapter while Google sign-in is off. The password change has a
+	// per-subject budget inside its handler.
+	if svc.HasAccounts() {
+		mux.HandleFunc("GET "+routeSessionSignInMethods, h.wrapIP(routeSessionSignInMethods, domain.OrgRouteIPLimit, h.signInMethods))
+		mux.HandleFunc("PUT "+routeSessionPassword, h.wrapIP(routeSessionPassword, domain.OrgRouteIPLimit, h.setPassword))
+		mux.HandleFunc("POST "+routeSessionGoogleLinkStart, h.wrapIP(routeSessionGoogleLinkStart, domain.OrgRouteIPLimit, h.startGoogleLink))
+		mux.HandleFunc("POST "+routeSessionGoogleLinkDone, h.wrapIP(routeSessionGoogleLinkDone, domain.OrgRouteIPLimit, h.completeGoogleLink))
+		mux.HandleFunc("DELETE "+routeSessionGoogle, h.wrapIP(routeSessionGoogle, domain.OrgRouteIPLimit, h.unlinkGoogle))
+		mux.HandleFunc("POST "+routeSessionRevokeAll, h.wrapIP(routeSessionRevokeAll, domain.OrgRouteIPLimit, h.revokeAllSessions))
+	}
+
 	// Username (bearer token required, per-IP budget shared with sign-up).
 	if svc.HasUsernames() {
 		mux.HandleFunc("PUT "+routeSessionUsername, h.wrapIP(routeSessionUsername, domain.SignupIPLimit, h.setUsername))
@@ -108,6 +121,7 @@ func New(svc *application.Service, opts Options) *Server {
 		mux.HandleFunc("POST /api/v1/orgs/{org_id}/members", h.wrapOrg(routeOrgMembers, h.addMember))
 		mux.HandleFunc("DELETE /api/v1/orgs/{org_id}/members/{user_id}", h.wrapOrg(routeOrgMembers, h.removeMember))
 		mux.HandleFunc("POST /api/v1/orgs/{org_id}/members/{user_id}/suspend", h.wrapOrg(routeOrgMembers, h.suspendMember))
+		mux.HandleFunc("POST /api/v1/orgs/{org_id}/members/{user_id}/reactivate", h.wrapOrg(routeOrgMembers, h.reactivateMember))
 		mux.HandleFunc("PUT /api/v1/orgs/{org_id}/members/{user_id}/role", h.wrapOrg(routeOrgMemberRole, h.setMemberRole))
 		mux.HandleFunc("PUT /api/v1/orgs/{org_id}/slug", h.wrapOrg(routeOrgSlug, h.setOrgSlug))
 		mux.HandleFunc("POST /api/v1/orgs/{org_id}/invites", h.wrapOrg(routeOrgInvites, h.createInvite))
@@ -125,6 +139,16 @@ func New(svc *application.Service, opts Options) *Server {
 			WithStaffOIDC(opts.StaffOIDC).
 			WithStaffHS256Disabled(opts.StaffHS256Disabled)
 		h.registerStaffRoutes(mux, ta)
+	}
+
+	// Staff account and audit routes. Same gate as the organization routes, and
+	// they exist only when the staff service token wires the account port.
+	if opts.StaffOIDC != nil && svc.HasStaffUsers() {
+		ta := NewTokenAuth(svc, opts.JWTSecret).
+			WithStaffSecret(opts.StaffSecret).
+			WithStaffOIDC(opts.StaffOIDC).
+			WithStaffHS256Disabled(opts.StaffHS256Disabled)
+		h.registerStaffUserRoutes(mux, ta)
 	}
 
 	// The tenant lookup the web edge makes before sign-in. Public and read-only.

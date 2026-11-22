@@ -16,6 +16,8 @@ const (
 type googleStartBody struct {
 	RedirectURI string `json:"redirect_uri"`
 	ReturnTo    string `json:"return_to"`
+	// InviteToken is optional. It is a bearer secret and is never logged.
+	InviteToken string `json:"invite_token"`
 }
 
 type googleCompleteBody struct {
@@ -34,6 +36,7 @@ func (h *handlers) googleStart(w http.ResponseWriter, r *http.Request) {
 	started, err := h.svc.StartGoogleSignIn(r.Context(), domain.GoogleSignInStart{
 		RedirectURI: body.RedirectURI,
 		ReturnTo:    body.ReturnTo,
+		InviteToken: body.InviteToken,
 	})
 	if err != nil {
 		writeAppError(w, err)
@@ -60,10 +63,39 @@ func (h *handlers) googleComplete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, map[string]string{
-		"access_token":  completed.Tokens.AccessToken,
-		"refresh_token": completed.Tokens.RefreshToken,
-		"expires_at":    completed.Tokens.ExpiresAt,
-		"return_to":     completed.ReturnTo,
-	})
+	writeJSON(w, http.StatusOK, googleCompleteJSONFrom(completed))
+}
+
+// googleCompleteJSON is the completed sign-in. Fields are in alphabetical order,
+// the order the original map encoder wrote them in. The invitation fields are
+// added only for an invitation sign-in, and org_slug and role only when they
+// are set, so a plain sign-in keeps its original body.
+type googleCompleteJSON struct {
+	AccessToken   string `json:"access_token"`
+	AlreadyMember *bool  `json:"already_member,omitempty"`
+	ExpiresAt     string `json:"expires_at"`
+	InviteID      string `json:"invite_id,omitempty"`
+	OrgID         string `json:"org_id,omitempty"`
+	OrgSlug       string `json:"org_slug,omitempty"`
+	RefreshToken  string `json:"refresh_token"`
+	ReturnTo      string `json:"return_to"`
+	Role          string `json:"role,omitempty"`
+}
+
+func googleCompleteJSONFrom(completed domain.GoogleSignInCompletion) googleCompleteJSON {
+	body := googleCompleteJSON{
+		AccessToken:  completed.Tokens.AccessToken,
+		RefreshToken: completed.Tokens.RefreshToken,
+		ExpiresAt:    completed.Tokens.ExpiresAt,
+		ReturnTo:     completed.ReturnTo,
+		InviteID:     completed.InviteID,
+		OrgID:        completed.OrgID,
+		OrgSlug:      completed.OrgSlug,
+		Role:         completed.Role,
+	}
+	if completed.InviteID != "" {
+		already := completed.AlreadyMember
+		body.AlreadyMember = &already
+	}
+	return body
 }

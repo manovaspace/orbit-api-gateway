@@ -12,6 +12,17 @@ import (
 // routes. It is an edge class; see GoogleSignInPolicy.
 const ClassAuthGoogle = "auth_google"
 
+// ClassSessionPassword is the per-subject budget for password changes. A wrong
+// current password counts like any other attempt.
+const ClassSessionPassword = "session_password"
+
+// SessionPasswordLimit and SessionPasswordWindow bound password changes per
+// subject: five attempts in fifteen minutes.
+const (
+	SessionPasswordLimit  = 5
+	SessionPasswordWindow = 15 * time.Minute
+)
+
 // Rate-limit classes, one per limited route.
 const (
 	ClassAuthOTPRequest      = "auth_otp_request"
@@ -148,6 +159,12 @@ func PolicyFor(class string) Policy {
 	return DefaultAuthPolicies()[class]
 }
 
+// SessionPasswordPolicy is the per-subject budget for password changes. The
+// bucket key is built with SubjectKey.
+func SessionPasswordPolicy() Policy {
+	return Policy{Class: ClassSessionPassword, Limit: SessionPasswordLimit, Window: SessionPasswordWindow}
+}
+
 // ClientKey is the per-class, per-client bucket key.
 func ClientKey(class, clientIP string) string {
 	return clientKeyPrefix + class + ":" + clientIP
@@ -157,6 +174,11 @@ func ClientKey(class, clientIP string) string {
 // keyed on the staff subject rather than the network address.
 func StaffKey(class, staffSubject string) string {
 	return clientKeyPrefix + class + ":staff:" + staffSubject
+}
+
+// SubjectKey is the per-class bucket for one account subject.
+func SubjectKey(class, subject string) string {
+	return clientKeyPrefix + class + ":subject:" + subject
 }
 
 // IdentifierKey is the per-identifier OTP request bucket key.

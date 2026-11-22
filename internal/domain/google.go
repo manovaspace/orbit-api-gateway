@@ -8,6 +8,9 @@ import "context"
 type GoogleSignInStart struct {
 	RedirectURI string
 	ReturnTo    string
+	// InviteToken is an optional email invitation token. It is a bearer secret:
+	// it is forwarded and never logged. Empty is a plain sign-in.
+	InviteToken string
 }
 
 // GoogleSignInStarted is the browser redirect and its single-use state. State is
@@ -22,6 +25,12 @@ type GoogleSignInStarted struct {
 type GoogleSignInCompletion struct {
 	Tokens   TokenPair
 	ReturnTo string
+	// The invitation the sign-in accepted; all empty for a plain sign-in.
+	InviteID      string
+	OrgID         string
+	OrgSlug       string
+	Role          string
+	AlreadyMember bool
 }
 
 // GoogleSignInService is the Google sign-in port over orbit-auth's AuthService.

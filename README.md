@@ -34,12 +34,19 @@ HTTP runs on **Fiber v3** fronting the same `net/http` handlers as before, so ro
 | `POST` | `/api/v1/auth/token/revoke` | Proxies to `orbit-auth` `RevokeRefreshToken`; idempotent, answers 204 |
 | `POST` | `/api/v1/auth/signup` | Proxies to `orbit-auth` `SignupService.RegisterWithEmail`. Unauthenticated; same 202 for new and existing addresses; disabled sign-up answers 404 |
 | `POST` | `/api/v1/auth/signup/verify` | Proxies to `orbit-auth` `SignupService.VerifySignup`; returns a token pair |
+| `GET` | `/api/v1/session/sign-in-methods` | Proxies to `orbit-auth` `AccountService.GetSignInMethods` (bearer access token); optional strings null when unset |
+| `PUT` | `/api/v1/session/password` | Proxies to `orbit-auth` `AccountService.SetPassword`; 204; per-subject budget 5 per 15 minutes; wrong current password is 403 `invalid_credentials` |
+| `POST` | `/api/v1/session/google/link/start` | Proxies to `orbit-auth` `AccountService.StartGoogleLink`; Google off is 404 |
+| `POST` | `/api/v1/session/google/link/complete` | Proxies to `orbit-auth` `AccountService.CompleteGoogleLink`; issues no tokens; Google off is 404 |
+| `DELETE` | `/api/v1/session/google` | Proxies to `orbit-auth` `AccountService.UnlinkGoogle`; 204 |
+| `POST` | `/api/v1/session/revoke-all` | Proxies to `orbit-auth` `AccountService.RevokeAllSessions` (`refresh_token` keeps one session); 204 |
 | `GET` | `/api/v1/orgs` | Proxies to `orbit-auth` `OrgService.ListMyOrgs` (bearer access token) |
 | `POST` | `/api/v1/orgs` | Proxies to `orbit-auth` `OrgService.CreateOrg` (`name`, optional `slug`) |
 | `GET` | `/api/v1/orgs/{org_id}/members` | Proxies to `orbit-auth` `OrgService.ListMembers` (non-member is 404) |
 | `POST` | `/api/v1/orgs/{org_id}/members` | Proxies to `orbit-auth` `OrgService.AddMember` (`user_id`); owner or admin only, else 403 |
 | `DELETE` | `/api/v1/orgs/{org_id}/members/{user_id}` | Proxies to `orbit-auth` `OrgService.RemoveMember`; owner, an admin removing a plain member, or the member themselves; last active owner is 409 |
 | `POST` | `/api/v1/orgs/{org_id}/members/{user_id}/suspend` | Proxies to `orbit-auth` `OrgService.SuspendMember`; owner or an admin suspending a plain member |
+| `POST` | `/api/v1/orgs/{org_id}/members/{user_id}/reactivate` | Proxies to `orbit-auth` `OrgService.ReactivateMember`; owner or an admin reactivating a plain member; answers `{status: reactivated}` |
 | `PUT` | `/api/v1/orgs/{org_id}/members/{user_id}/role` | Proxies to `orbit-auth` `OrgService.SetMemberRole` (`role`: `owner`, `admin`, `member`); only an owner grants `owner` or `admin` |
 | `PUT` | `/api/v1/orgs/{org_id}/slug` | Proxies to `orbit-auth` `OrgService.SetOrgSlug` (`slug`); owner only. The old slug stays reserved and resolves |
 | `GET` | `/api/v1/public/tenants/{slug}` | **Public.** Proxies to `orbit-auth` `TenantService.ResolveTenant`; returns `org_id`, `slug`, `name`, `retired` only; cacheable 30 s; 404 for an unknown slug |
@@ -50,6 +57,11 @@ HTTP runs on **Fiber v3** fronting the same `net/http` handlers as before, so ro
 | `POST` | `/api/v1/public/invites/preview` | **Public.** Proxies to `orbit-auth` `InviteService.GetInvitePreview` (`token` in the JSON body, never the URL); returns `org_id`, `org_name`, `org_slug`, `role`, `expires_at` only, never the recipient; unknown, expired or not pending is 404; `Cache-Control: no-store`; per-IP budget 20 a minute |
 | `POST` | `/api/v1/public/invites/accept` | **Public.** Proxies to `orbit-auth` `InviteService.AcceptInviteWithSignup` (`token`, `password`, `display_name` in the JSON body); phone invitations only; 201 `{user_id, org_id}`; 409 `account_exists`; 403 when sign-up is disabled; per-IP budget 5 a minute |
 | `POST` | `/api/v1/session/org` | Proxies to `orbit-auth` `OrgService.SelectOrg` (`org_id`, `refresh_token`); returns a token pair |
+| `GET` | `/api/v1/staff/users` | **Staff only.** Proxies to `orbit-auth` `StaffUserService.ListUsers` (`q`, `status`, `page_token`, `page_size` 0-100); Keycloak staff token only |
+| `GET` | `/api/v1/staff/users/{user_id}` | **Staff only.** Proxies to `orbit-auth` `StaffUserService.GetUser`; account with memberships |
+| `POST` | `/api/v1/staff/users/{user_id}/disable` | **Staff only.** Proxies to `orbit-auth` `StaffUserService.DisableUser` (`reason` in the body); answers the account |
+| `POST` | `/api/v1/staff/users/{user_id}/enable` | **Staff only.** Proxies to `orbit-auth` `StaffUserService.EnableUser` (`reason` in the body); answers the account |
+| `GET` | `/api/v1/staff/audit-events` | **Staff only.** Proxies to `orbit-auth` `StaffUserService.ListAuditEvents` (`org_id` or `user_id` required) |
 | `POST` | `/api/v1/system/ownership/challenge` | In-memory 6-digit OTP (10m TTL). **Does not send email.** Alias: `/api/v1/admin/challenge` |
 | `POST` | `/api/v1/system/ownership/verify` | Verify in-memory code; fingerprint is not a signing secret. Alias: `/api/v1/admin/verify` |
 | `POST` | `/api/v1/dev/onboard/claim` | Workstation onboarding claim (aliases: `/api/v1/onboard/claim`, `/v1/onboard/claim`; supports `Idempotency-Key` header) |

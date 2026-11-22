@@ -84,6 +84,10 @@ func (s *Service) checkIdentifierLimit(ctx context.Context, identifier string) (
 // StartGoogleSignIn begins a Google sign-in and returns the browser redirect and
 // its single-use state.
 func (s *Service) StartGoogleSignIn(ctx context.Context, in domain.GoogleSignInStart) (domain.GoogleSignInStarted, error) {
+	in.InviteToken = strings.TrimSpace(in.InviteToken)
+	if len(in.InviteToken) > maxInviteTokenBytes {
+		return domain.GoogleSignInStarted{}, domain.NewCodedError(domain.KindInvalidArgument, domain.CodeInviteInvalid, "the invitation is not valid")
+	}
 	return s.google.StartGoogleSignIn(ctx, in)
 }
 
