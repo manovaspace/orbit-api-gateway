@@ -31,8 +31,8 @@ func newAudienceEnv(t *testing.T) audienceEnv {
 	}
 	doc, _ := json.Marshal(map[string]any{"keys": []map[string]string{{
 		"kty": "RSA", "use": "sig", "alg": "RS256", "kid": "k1",
-		"n": base64.RawURLEncoding.EncodeToString(key.PublicKey.N.Bytes()),
-		"e": base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.PublicKey.E)).Bytes()),
+		"n": base64.RawURLEncoding.EncodeToString(key.N.Bytes()),
+		"e": base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.E)).Bytes()),
 	}}})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write(doc)
