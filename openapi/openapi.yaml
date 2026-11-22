@@ -20,7 +20,7 @@ paths:
   /api/v1/auth/login:
     post:
       operationId: authLogin
-      summary: Login with email or mobile number and password
+      summary: Login with username, mobile number or email address and password
       security: []
       requestBody:
         required: true
@@ -35,7 +35,7 @@ paths:
               properties:
                 identifier:
                   type: string
-                  description: Email address or E.164 mobile number (for example +989121234567).
+                  description: Username, E.164 mobile number (for example +989121234567) or email address.
                 email:
                   type: string
                   format: email
@@ -593,6 +593,138 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "429":
           description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/auth/google/start:
+    post:
+      operationId: authGoogleStart
+      summary: Start a Google sign-in
+      description: >
+        Returns the Google authorization URL to send the browser to, and the
+        single-use state. The caller keeps the state and sends it back with the
+        authorization code to `/api/v1/auth/google/complete`; the state is valid
+        for ten minutes. The answer is never cacheable. When Google sign-in is
+        off the edge answers 404 as if the route did not exist.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                redirect_uri:
+                  type: string
+                  description: Must equal one of the redirect URIs orbit-auth is configured with.
+                return_to:
+                  type: string
+                  description: A path on the product's origin. Empty means "/".
+      responses:
+        "200":
+          description: Authorization URL and state issued
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoogleSignInStarted"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Google sign-in is off (the route behaves as if it does not exist)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/auth/google/complete:
+    post:
+      operationId: authGoogleComplete
+      summary: Complete a Google sign-in and issue tokens
+      description: >
+        Exchanges the state from `/api/v1/auth/google/start` and the code Google
+        returned to the redirect URI for a token pair. It returns the same token
+        fields as the other auth routes, plus `return_to`. The answer is never
+        cacheable. When Google sign-in is off the edge answers 404.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [state, code]
+              properties:
+                state:
+                  type: string
+                  writeOnly: true
+                code:
+                  type: string
+                  writeOnly: true
+      responses:
+        "200":
+          description: Tokens issued
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoogleSignInTokens"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Google sign-in failed (unknown, used or expired state, or a refused code)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Account not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Google sign-in is off (the route behaves as if it does not exist)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
           content:
             application/json:
               schema:
@@ -1583,6 +1715,61 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/session/username:
+    put:
+      operationId: sessionUsernameSet
+      summary: Set the caller's username
+      description: >
+        Sets the username of the account the bearer access token belongs to.
+        orbit-auth stores it trimmed and lower case. A username another account
+        already holds is 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username]
+              properties:
+                username:
+                  type: string
+      responses:
+        "200":
+          description: Username stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionUsername"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Username already taken
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /api/v1/flags:
     get:
       operationId: flagsList
@@ -1984,3 +2171,33 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FeatureFlag"
+    GoogleSignInStarted:
+      type: object
+      required:
+        - authorization_url
+        - state
+      properties:
+        authorization_url:
+          type: string
+          description: Send the browser here.
+        state:
+          type: string
+          description: Single-use state, valid for ten minutes. Send it back to the complete route.
+    GoogleSignInTokens:
+      allOf:
+        - $ref: "#/components/schemas/TokenPair"
+        - type: object
+          required:
+            - return_to
+          properties:
+            return_to:
+              type: string
+              description: The return path given at start, "/" when it was empty.
+    SessionUsername:
+      type: object
+      required:
+        - username
+      properties:
+        username:
+          type: string
+          description: The stored form, trimmed and lower case.

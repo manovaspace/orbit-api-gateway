@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+// ClassAuthGoogle is the per-IP budget for the Google sign-in start and complete
+// routes. It is an edge class; see GoogleSignInPolicy.
+const ClassAuthGoogle = "auth_google"
+
 // Rate-limit classes, one per limited route.
 const (
 	ClassAuthOTPRequest      = "auth_otp_request"
@@ -27,6 +31,7 @@ const (
 	authClassPasswordLimit   = 10
 	authClassRefreshLimit    = 30
 	otpIdentifierWindowLimit = 3
+	googleSignInLimit        = 20
 	defaultAuthPolicyWindow  = time.Minute
 	// SignupIPLimit is the strict per-IP budget for signup and signup
 	// verification. InviteAcceptIPLimit is the same budget for accepting an
@@ -118,10 +123,19 @@ func OrgRoutePolicy(route string) Policy {
 	return Policy{Class: route, Limit: OrgRouteLimit, Window: RouteWindow}
 }
 
+// GoogleSignInPolicy is the per-IP budget for the Google sign-in routes. It is
+// an edge class, not an ADR-018 default, so it stays out of DefaultAuthPolicies.
+func GoogleSignInPolicy() Policy {
+	return Policy{Class: ClassAuthGoogle, Limit: googleSignInLimit, Window: defaultAuthPolicyWindow}
+}
+
 // PolicyFor returns the class policy. A class without a policy gets the zero
 // policy, exactly as the edge behaved before: the limiter still answers and the
 // response still carries its headers.
 func PolicyFor(class string) Policy {
+	if class == ClassAuthGoogle {
+		return GoogleSignInPolicy()
+	}
 	return DefaultAuthPolicies()[class]
 }
 
