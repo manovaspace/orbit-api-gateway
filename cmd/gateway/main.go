@@ -44,6 +44,12 @@ func main() {
 		os.Exit(1)
 	}
 	authClient.AuthHTTPURL = envOr("AUTH_HTTP_URL", "http://localhost:10011")
+	// The staff routes exist only with a service token. The token is never logged.
+	authClient.StaffServiceToken = strings.TrimSpace(os.Getenv("AUTH_STAFF_SERVICE_TOKEN"))
+	var staffOrgs domain.StaffOrgService
+	if authClient.StaffServiceToken != "" {
+		staffOrgs = authClient
+	}
 
 	var limiter domain.Limiter
 	if addr := os.Getenv("REDIS_ADDR"); addr != "" {
@@ -65,6 +71,7 @@ func main() {
 	svc := application.NewService(application.Deps{
 		Auth:       authClient,
 		Orgs:       authClient,
+		StaffOrgs:  staffOrgs,
 		Signup:     authClient,
 		Tenants:    authClient,
 		Invites:    authClient,
@@ -168,14 +175,14 @@ func resolveJWTSecret(secret string, dev bool) string {
 // required values is missing: staff OIDC is then off.
 func staffOIDCFromEnv() (*staffoidc.Verifier, error) {
 	issuer := strings.TrimSpace(os.Getenv("STAFF_OIDC_ISSUER"))
-	audience := strings.TrimSpace(os.Getenv("STAFF_OIDC_AUDIENCE"))
+	audiences := splitList(os.Getenv("STAFF_OIDC_AUDIENCE"))
 	groups := splitList(os.Getenv("STAFF_OIDC_ALLOWED_GROUPS"))
-	if issuer == "" || audience == "" || len(groups) == 0 {
+	if issuer == "" || len(audiences) == 0 || len(groups) == 0 {
 		return nil, nil
 	}
 	return staffoidc.New(staffoidc.Config{
 		Issuer:        issuer,
-		Audience:      audience,
+		Audiences:     audiences,
 		AllowedGroups: groups,
 		JWKSURL:       strings.TrimSpace(os.Getenv("STAFF_OIDC_JWKS_URL")),
 	})

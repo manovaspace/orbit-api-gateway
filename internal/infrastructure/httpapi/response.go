@@ -55,6 +55,8 @@ func writeAppError(w http.ResponseWriter, err error) {
 			status = http.StatusConflict
 		case domain.KindBadGateway:
 			status = http.StatusBadGateway
+		case domain.KindUnavailable:
+			status = http.StatusServiceUnavailable
 		}
 	}
 	writeJSON(w, status, map[string]string{"error": message})

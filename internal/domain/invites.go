@@ -1,6 +1,24 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"strings"
+	"unicode/utf8"
+)
+
+// AcceptURLMaxLength is the longest accept_url the edge forwards, in characters
+// after trimming. orbit-auth validates the URL itself.
+const AcceptURLMaxLength = 500
+
+// NormalizeAcceptURL trims an optional acceptance-page URL and bounds its length.
+// An empty value is valid: the invitation then carries only the code.
+func NormalizeAcceptURL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if utf8.RuneCountInString(raw) > AcceptURLMaxLength {
+		return "", NewError(KindInvalidArgument, "accept_url is too long")
+	}
+	return raw, nil
+}
 
 // InvitePreview is what the holder of an invitation token may see before signing
 // in. It carries no recipient.
@@ -10,6 +28,11 @@ type InvitePreview struct {
 	OrgSlug   string
 	Role      string
 	ExpiresAt string
+	// Channel is how the invitation was delivered: "email" or "phone".
+	Channel string
+	// AccountExists reports that an active account already uses the invited
+	// phone number or email. It never says whose account it is.
+	AccountExists bool
 }
 
 // InviteSignup creates the account for a phone invitation. Token is the raw
@@ -23,8 +46,13 @@ type InviteSignup struct {
 // InviteAcceptance is the account a phone invitation created and the organization
 // it joined.
 type InviteAcceptance struct {
-	UserID string
-	OrgID  string
+	UserID   string
+	OrgID    string
+	InviteID string
+	Role     string
+	// Identifier is what the new account signs in with: its phone in E.164 form,
+	// or its email address.
+	Identifier string
 }
 
 // InviteService is the public invitation port over orbit-auth's InviteService.

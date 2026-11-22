@@ -75,9 +75,10 @@ type membershipEnvelope struct {
 }
 
 type inviteMemberBody struct {
-	Email string `json:"email"`
-	Phone string `json:"phone"`
-	Role  string `json:"role"`
+	Email     string `json:"email"`
+	Phone     string `json:"phone"`
+	Role      string `json:"role"`
+	AcceptURL string `json:"accept_url"`
 }
 
 type acceptInviteBody struct {
@@ -447,10 +448,11 @@ func (h *handlers) createInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	created, err := h.svc.InviteMember(r.Context(), domain.InviteRequest{
-		OrgID: r.PathValue("org_id"),
-		Email: body.Email,
-		Phone: body.Phone,
-		Role:  body.Role,
+		OrgID:     r.PathValue("org_id"),
+		Email:     body.Email,
+		Phone:     body.Phone,
+		Role:      body.Role,
+		AcceptURL: body.AcceptURL,
 	}, token)
 	if err != nil {
 		writeAppError(w, err)

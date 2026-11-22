@@ -58,4 +58,10 @@ func TestStaffOIDCFromEnv(t *testing.T) {
 	if v, _ := staffOIDCFromEnv(); v != nil {
 		t.Fatal("missing audience must leave staff OIDC off")
 	}
+
+	// A comma list accepts one client id per console; blank items are dropped.
+	t.Setenv("STAFF_OIDC_AUDIENCE", "handbook-ops, falak-console ,")
+	if v, err := staffOIDCFromEnv(); v == nil || err != nil {
+		t.Fatalf("audience list: verifier = %v, err = %v; want enabled", v, err)
+	}
 }

@@ -55,9 +55,10 @@ type Config struct {
 	// Issuer is the exact iss the token must carry, for example
 	// https://identity.internal.manova.space/realms/staff.
 	Issuer string
-	// Audience is the console client id. It matches an aud entry (string or
-	// array) or the azp claim.
-	Audience string
+	// Audiences are the console client ids the edge accepts. A token matches when
+	// any of its aud entries (string or array) or its azp claim equals any of
+	// them. At least one is required; blank entries are dropped.
+	Audiences []string
 	// AllowedGroups lists the staff groups. A leading slash is ignored on both
 	// sides, so "dev" and "/dev" match the same group.
 	AllowedGroups []string
@@ -81,13 +82,13 @@ type Identity struct {
 
 // Verifier checks Keycloak access tokens. It is safe for concurrent use.
 type Verifier struct {
-	issuer   string
-	audience string
-	jwksURL  string
-	allowed  map[string]struct{}
-	client   *http.Client
-	ttl      time.Duration
-	clock    Clock
+	issuer    string
+	audiences []string
+	jwksURL   string
+	allowed   map[string]struct{}
+	client    *http.Client
+	ttl       time.Duration
+	clock     Clock
 
 	mu          sync.Mutex
 	keys        map[string]*rsa.PublicKey
@@ -98,11 +99,16 @@ type Verifier struct {
 // New validates cfg and returns a Verifier.
 func New(cfg Config) (*Verifier, error) {
 	issuer := strings.TrimSpace(cfg.Issuer)
-	audience := strings.TrimSpace(cfg.Audience)
 	if issuer == "" {
 		return nil, errors.New("staffoidc: issuer is required")
 	}
-	if audience == "" {
+	var audiences []string
+	for _, audience := range cfg.Audiences {
+		if audience = strings.TrimSpace(audience); audience != "" {
+			audiences = append(audiences, audience)
+		}
+	}
+	if len(audiences) == 0 {
 		return nil, errors.New("staffoidc: audience is required")
 	}
 	jwksURL := strings.TrimSpace(cfg.JWKSURL)
@@ -128,13 +134,13 @@ func New(cfg Config) (*Verifier, error) {
 		clock = systemClock{}
 	}
 	return &Verifier{
-		issuer:   issuer,
-		audience: audience,
-		jwksURL:  jwksURL,
-		allowed:  allowed,
-		client:   client,
-		ttl:      ttl,
-		clock:    clock,
+		issuer:    issuer,
+		audiences: audiences,
+		jwksURL:   jwksURL,
+		allowed:   allowed,
+		client:    client,
+		ttl:       ttl,
+		clock:     clock,
 	}, nil
 }
 
@@ -162,7 +168,7 @@ func (v *Verifier) Verify(ctx context.Context, raw string) (Identity, error) {
 	if err != nil {
 		return Identity{}, fmt.Errorf("staffoidc: parse token: %w", err)
 	}
-	if !audienceMatches(claims, v.audience) {
+	if !audienceMatches(claims, v.audiences) {
 		return Identity{}, errors.New("staffoidc: audience mismatch")
 	}
 	subject, _ := claims["sub"].(string)
@@ -296,16 +302,26 @@ func rsaKey(k jwk) (*rsa.PublicKey, bool) {
 	return &rsa.PublicKey{N: new(big.Int).SetBytes(nb), E: int(e.Int64())}, true
 }
 
-func audienceMatches(claims jwt.MapClaims, audience string) bool {
-	if azp, _ := claims["azp"].(string); azp == audience {
+// audienceMatches reports whether the token's azp or one of its aud entries is one
+// of the configured audiences.
+func audienceMatches(claims jwt.MapClaims, audiences []string) bool {
+	accepted := func(value string) bool {
+		for _, audience := range audiences {
+			if value == audience {
+				return true
+			}
+		}
+		return false
+	}
+	if azp, _ := claims["azp"].(string); azp != "" && accepted(azp) {
 		return true
 	}
 	switch aud := claims["aud"].(type) {
 	case string:
-		return aud == audience
+		return accepted(aud)
 	case []any:
 		for _, item := range aud {
-			if s, ok := item.(string); ok && s == audience {
+			if s, ok := item.(string); ok && accepted(s) {
 				return true
 			}
 		}

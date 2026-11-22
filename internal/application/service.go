@@ -15,6 +15,7 @@ import (
 type Deps struct {
 	Auth       domain.AuthService
 	Orgs       domain.OrgService
+	StaffOrgs  domain.StaffOrgService
 	Signup     domain.SignupService
 	Tenants    domain.TenantService
 	Invites    domain.InviteService
@@ -36,6 +37,7 @@ type Deps struct {
 type Service struct {
 	auth       domain.AuthService
 	orgs       domain.OrgService
+	staffOrgs  domain.StaffOrgService
 	signup     domain.SignupService
 	tenants    domain.TenantService
 	invites    domain.InviteService
@@ -61,6 +63,7 @@ func NewService(deps Deps) *Service {
 	return &Service{
 		auth:       deps.Auth,
 		orgs:       deps.Orgs,
+		staffOrgs:  deps.StaffOrgs,
 		signup:     deps.Signup,
 		tenants:    deps.Tenants,
 		invites:    deps.Invites,
@@ -84,6 +87,10 @@ func (s *Service) HasAuth() bool { return s.auth != nil }
 
 // HasOrgs reports whether the upstream organization port is wired.
 func (s *Service) HasOrgs() bool { return s.orgs != nil }
+
+// HasStaffOrgs reports whether the upstream staff organization port is wired. The
+// edge wires it only when a staff service token is configured.
+func (s *Service) HasStaffOrgs() bool { return s.staffOrgs != nil }
 
 // HasTenants reports whether the upstream tenant-resolution port is wired.
 func (s *Service) HasTenants() bool { return s.tenants != nil }

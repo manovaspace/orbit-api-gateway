@@ -28,7 +28,12 @@ type Client struct {
 	tenant authv1.TenantServiceClient
 	invite authv1.InviteServiceClient
 	signup authv1.SignupServiceClient
+	staff  authv1.StaffOrgServiceClient
 	conn   *grpc.ClientConn
+
+	// StaffServiceToken is the shared secret orbit-auth checks on every staff
+	// call (AUTH_STAFF_SERVICE_TOKEN). It is sent as metadata and never logged.
+	StaffServiceToken string
 
 	// AuthHTTPURL is the base URL of orbit-auth's HTTP listener. The flag
 	// document is served there, not over gRPC.
@@ -45,6 +50,7 @@ var (
 	_ domain.FlagSource          = (*Client)(nil)
 	_ domain.GoogleSignInService = (*Client)(nil)
 	_ domain.UsernameService     = (*Client)(nil)
+	_ domain.StaffOrgService     = (*Client)(nil)
 )
 
 // NewClient dials the upstream auth service. The caller closes the client.
@@ -61,6 +67,7 @@ func NewClient(addr string, opts ...grpc.DialOption) (*Client, error) {
 		tenant:     authv1.NewTenantServiceClient(conn),
 		invite:     authv1.NewInviteServiceClient(conn),
 		signup:     authv1.NewSignupServiceClient(conn),
+		staff:      authv1.NewStaffOrgServiceClient(conn),
 		conn:       conn,
 		httpClient: &http.Client{Timeout: 5 * time.Second},
 	}, nil
@@ -258,10 +265,11 @@ func (c *Client) SetMemberRole(ctx context.Context, orgID, userID, role, accessT
 // or a phone number. The raw token comes back only for a phone invitation.
 func (c *Client) InviteMember(ctx context.Context, in domain.InviteRequest, accessToken string) (domain.CreatedInvite, error) {
 	resp, err := c.orgs.InviteMember(callerContext(ctx, accessToken), &authv1.InviteMemberRequest{
-		OrgId: in.OrgID,
-		Email: in.Email,
-		Phone: in.Phone,
-		Role:  in.Role,
+		OrgId:     in.OrgID,
+		Email:     in.Email,
+		Phone:     in.Phone,
+		Role:      in.Role,
+		AcceptUrl: in.AcceptURL,
 	})
 	if err != nil {
 		return domain.CreatedInvite{}, orgUpstreamError(err)
@@ -320,11 +328,13 @@ func (c *Client) GetInvitePreview(ctx context.Context, token string) (domain.Inv
 		return domain.InvitePreview{}, invitePreviewUpstreamError(err)
 	}
 	return domain.InvitePreview{
-		OrgID:     resp.GetOrgId(),
-		OrgName:   resp.GetOrgName(),
-		OrgSlug:   resp.GetOrgSlug(),
-		Role:      resp.GetRole(),
-		ExpiresAt: resp.GetExpiresAt(),
+		OrgID:         resp.GetOrgId(),
+		OrgName:       resp.GetOrgName(),
+		OrgSlug:       resp.GetOrgSlug(),
+		Role:          resp.GetRole(),
+		ExpiresAt:     resp.GetExpiresAt(),
+		Channel:       resp.GetChannel(),
+		AccountExists: resp.GetAccountExists(),
 	}, nil
 }
 
@@ -339,7 +349,13 @@ func (c *Client) AcceptInviteWithSignup(ctx context.Context, in domain.InviteSig
 	if err != nil {
 		return domain.InviteAcceptance{}, inviteSignupUpstreamError(err)
 	}
-	return domain.InviteAcceptance{UserID: resp.GetUserId(), OrgID: resp.GetOrgId()}, nil
+	return domain.InviteAcceptance{
+		UserID:     resp.GetUserId(),
+		OrgID:      resp.GetOrgId(),
+		InviteID:   resp.GetInviteId(),
+		Role:       resp.GetRole(),
+		Identifier: resp.GetIdentifier(),
+	}, nil
 }
 
 // callerContext attaches the bearer access token the way orbit-auth's OrgService

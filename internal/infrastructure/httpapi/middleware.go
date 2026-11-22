@@ -244,17 +244,51 @@ func (a *TokenAuth) requireKeycloakStaff(next http.Handler, w http.ResponseWrite
 	next.ServeHTTP(w, r.WithContext(enrichStaffContext(r.Context(), staff)))
 }
 
-// StaffRateLimit applies the class budget to a Keycloak-authenticated staff
-// caller, keyed on the staff subject. It runs after RequireStaff. Other callers
-// and deployments without a limiter pass through unchanged.
-func (a *TokenAuth) StaffRateLimit(class string, next http.Handler) http.Handler {
+// RequireStaffOIDC admits only a Keycloak staff token that the staff OIDC verifier
+// accepts. Unlike RequireStaff it never takes the HS256 path, whatever
+// STAFF_HS256_ENABLED says, and it does not read the break-glass reason header: the
+// staff organization routes take their reason in the body.
+func (a *TokenAuth) RequireStaffOIDC(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if a.oidc == nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "auth misconfigured"})
+			return
+		}
+		authorization := r.Header.Get("Authorization")
+		if !strings.HasPrefix(authorization, "Bearer ") {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing bearer token"})
+			return
+		}
+		tokenString := strings.TrimPrefix(authorization, "Bearer ")
+		if alg, _, ok := unverifiedHeader(tokenString); !ok || alg != "RS256" {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+			return
+		}
+		identity, err := a.oidc.Verify(r.Context(), tokenString)
+		if err != nil {
+			if errors.Is(err, staffoidc.ErrNotAllowed) {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": "staff access required"})
+				return
+			}
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+			return
+		}
+		staff := StaffIdentity{StaffSubject: keycloakSubjectPrefix + identity.Subject, IsStaff: true}
+		next.ServeHTTP(w, r.WithContext(enrichStaffContext(r.Context(), staff)))
+	})
+}
+
+// StaffRateLimit applies the policy to a Keycloak-authenticated staff caller,
+// keyed on the staff subject. It runs after RequireStaff or RequireStaffOIDC. Other
+// callers and deployments without a limiter pass through unchanged.
+func (a *TokenAuth) StaffRateLimit(policy domain.Policy, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		subject, ok := keycloakStaffSubject(r.Context())
 		if !ok || a.svc == nil || !a.svc.HasLimiter() {
 			next.ServeHTTP(w, r)
 			return
 		}
-		decision, err := a.svc.CheckStaffLimit(r.Context(), class, subject)
+		decision, err := a.svc.CheckStaffLimit(r.Context(), policy, subject)
 		if err != nil {
 			writeLimitError(w, err)
 			return

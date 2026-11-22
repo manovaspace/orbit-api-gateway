@@ -117,6 +117,16 @@ func New(svc *application.Service, opts Options) *Server {
 		mux.HandleFunc("POST /api/v1/session/org", h.wrapIP(routeSessionOrg, domain.OrgRouteIPLimit, h.selectOrg))
 	}
 
+	// Staff organization routes. Keycloak staff only, and they exist only when the
+	// staff OIDC verifier and the staff service token are both configured.
+	if opts.StaffOIDC != nil && svc.HasStaffOrgs() {
+		ta := NewTokenAuth(svc, opts.JWTSecret).
+			WithStaffSecret(opts.StaffSecret).
+			WithStaffOIDC(opts.StaffOIDC).
+			WithStaffHS256Disabled(opts.StaffHS256Disabled)
+		h.registerStaffRoutes(mux, ta)
+	}
+
 	// The tenant lookup the web edge makes before sign-in. Public and read-only.
 	if svc.HasTenants() {
 		mux.HandleFunc("GET "+routeTenantResolve, h.wrapIP(routeTenantResolve, domain.TenantResolveIPLimit, h.resolveTenant))
