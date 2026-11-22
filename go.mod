@@ -5,7 +5,7 @@ go 1.27.4
 require (
 	github.com/gofiber/fiber/v3 v3.7.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
-	github.com/manovaspace/orbit-auth v0.11.1-0.20261122103958-f86003369ee4
+	github.com/manovaspace/orbit-auth v0.11.1-0.20261122122400-846dc14dd07d
 	github.com/manovaspace/orbit-kit v0.1.0
 	github.com/redis/go-redis/v9 v9.23.0
 	go.opentelemetry.io/otel v1.47.0
