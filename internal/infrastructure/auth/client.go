@@ -23,13 +23,15 @@ import (
 // domain.UsernameService and domain.FlagSource over gRPC and
 // orbit-auth's HTTP surface.
 type Client struct {
-	api    authv1.AuthServiceClient
-	orgs   authv1.OrgServiceClient
-	tenant authv1.TenantServiceClient
-	invite authv1.InviteServiceClient
-	signup authv1.SignupServiceClient
-	staff  authv1.StaffOrgServiceClient
-	conn   *grpc.ClientConn
+	api     authv1.AuthServiceClient
+	orgs    authv1.OrgServiceClient
+	tenant  authv1.TenantServiceClient
+	invite  authv1.InviteServiceClient
+	signup  authv1.SignupServiceClient
+	staff   authv1.StaffOrgServiceClient
+	users   authv1.StaffUserServiceClient
+	account authv1.AccountServiceClient
+	conn    *grpc.ClientConn
 
 	// StaffServiceToken is the shared secret orbit-auth checks on every staff
 	// call (AUTH_STAFF_SERVICE_TOKEN). It is sent as metadata and never logged.
@@ -51,6 +53,8 @@ var (
 	_ domain.GoogleSignInService = (*Client)(nil)
 	_ domain.UsernameService     = (*Client)(nil)
 	_ domain.StaffOrgService     = (*Client)(nil)
+	_ domain.StaffUserService    = (*Client)(nil)
+	_ domain.AccountService      = (*Client)(nil)
 )
 
 // NewClient dials the upstream auth service. The caller closes the client.
@@ -68,6 +72,8 @@ func NewClient(addr string, opts ...grpc.DialOption) (*Client, error) {
 		invite:     authv1.NewInviteServiceClient(conn),
 		signup:     authv1.NewSignupServiceClient(conn),
 		staff:      authv1.NewStaffOrgServiceClient(conn),
+		users:      authv1.NewStaffUserServiceClient(conn),
+		account:    authv1.NewAccountServiceClient(conn),
 		conn:       conn,
 		httpClient: &http.Client{Timeout: 5 * time.Second},
 	}, nil
@@ -242,6 +248,15 @@ func (c *Client) RemoveMember(ctx context.Context, orgID, userID, accessToken st
 // SuspendMember suspends a user's membership.
 func (c *Client) SuspendMember(ctx context.Context, orgID, userID, accessToken string) error {
 	_, err := c.orgs.SuspendMember(callerContext(ctx, accessToken), &authv1.SuspendMemberRequest{
+		OrgId:  orgID,
+		UserId: userID,
+	})
+	return orgUpstreamError(err)
+}
+
+// ReactivateMember lifts the suspension of a membership.
+func (c *Client) ReactivateMember(ctx context.Context, orgID, userID, accessToken string) error {
+	_, err := c.orgs.ReactivateMember(callerContext(ctx, accessToken), &authv1.ReactivateMemberRequest{
 		OrgId:  orgID,
 		UserId: userID,
 	})

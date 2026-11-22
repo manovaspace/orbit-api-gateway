@@ -187,6 +187,16 @@ func (s *orgSignupStub) SuspendMember(ctx context.Context, in *authv1.SuspendMem
 	return &authv1.SuspendMemberResponse{}, nil
 }
 
+func (s *orgSignupStub) ReactivateMember(ctx context.Context, in *authv1.ReactivateMemberRequest) (*authv1.ReactivateMemberResponse, error) {
+	s.mu.Lock()
+	s.orgID = in.GetOrgId()
+	s.mu.Unlock()
+	if err := s.record(ctx); err != nil {
+		return nil, err
+	}
+	return &authv1.ReactivateMemberResponse{}, nil
+}
+
 func (s *orgSignupStub) SetMemberRole(ctx context.Context, in *authv1.SetMemberRoleRequest) (*authv1.SetMemberRoleResponse, error) {
 	s.mu.Lock()
 	s.orgID = in.GetOrgId()
@@ -423,6 +433,11 @@ func TestOrgRoutesForwardTheBearerTokenAndReturnTheirShapes(t *testing.T) {
 			wantBody:   `{"status":"suspended"}` + "\n",
 		},
 		{
+			name: "reactivate member", method: http.MethodPost, path: "/api/v1/orgs/org-1/members/user-2/reactivate",
+			wantStatus: http.StatusOK,
+			wantBody:   `{"status":"reactivated"}` + "\n",
+		},
+		{
 			name: "set org slug", method: http.MethodPut, path: "/api/v1/orgs/org-1/slug", body: `{"slug":" new-name "}`,
 			wantStatus: http.StatusOK,
 			wantBody:   `{"organization":{"id":"org-1","name":"Acme","slug":"new-name","created_at":"2026-11-02T10:00:00Z","updated_at":"2026-11-02T10:00:00Z"}}` + "\n",
@@ -499,6 +514,7 @@ func TestOrgRoutesRequireABearerToken(t *testing.T) {
 		{"add member", http.MethodPost, "/api/v1/orgs/org-1/members", `{"user_id":"user-2"}`},
 		{"remove member", http.MethodDelete, "/api/v1/orgs/org-1/members/user-2", ""},
 		{"suspend member", http.MethodPost, "/api/v1/orgs/org-1/members/user-2/suspend", ""},
+		{"reactivate member", http.MethodPost, "/api/v1/orgs/org-1/members/user-2/reactivate", ""},
 		{"set member role", http.MethodPut, "/api/v1/orgs/org-1/members/user-2/role", `{"role":"admin"}`},
 		{"set org slug", http.MethodPut, "/api/v1/orgs/org-1/slug", `{"slug":"new-name"}`},
 		{"create invite", http.MethodPost, "/api/v1/orgs/org-1/invites", `{"email":"p@example.com"}`},
@@ -799,6 +815,7 @@ func TestMembershipWritesSurfaceOrbitAuthAuthorization(t *testing.T) {
 		{"add member", http.MethodPost, "/api/v1/orgs/org-1/members", `{"user_id":"user-2"}`},
 		{"remove member", http.MethodDelete, "/api/v1/orgs/org-1/members/user-2", ""},
 		{"suspend member", http.MethodPost, "/api/v1/orgs/org-1/members/user-2/suspend", ""},
+		{"reactivate member", http.MethodPost, "/api/v1/orgs/org-1/members/user-2/reactivate", ""},
 		{"set member role", http.MethodPut, "/api/v1/orgs/org-1/members/user-2/role", `{"role":"admin"}`},
 		{"create invite", http.MethodPost, "/api/v1/orgs/org-1/invites", `{"email":"p@example.com"}`},
 		{"list invites", http.MethodGet, "/api/v1/orgs/org-1/invites", ""},

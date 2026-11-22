@@ -16,6 +16,8 @@ type Deps struct {
 	Auth       domain.AuthService
 	Orgs       domain.OrgService
 	StaffOrgs  domain.StaffOrgService
+	StaffUsers domain.StaffUserService
+	Accounts   domain.AccountService
 	Signup     domain.SignupService
 	Tenants    domain.TenantService
 	Invites    domain.InviteService
@@ -38,6 +40,8 @@ type Service struct {
 	auth       domain.AuthService
 	orgs       domain.OrgService
 	staffOrgs  domain.StaffOrgService
+	staffUsers domain.StaffUserService
+	accounts   domain.AccountService
 	signup     domain.SignupService
 	tenants    domain.TenantService
 	invites    domain.InviteService
@@ -64,6 +68,8 @@ func NewService(deps Deps) *Service {
 		auth:       deps.Auth,
 		orgs:       deps.Orgs,
 		staffOrgs:  deps.StaffOrgs,
+		staffUsers: deps.StaffUsers,
+		accounts:   deps.Accounts,
 		signup:     deps.Signup,
 		tenants:    deps.Tenants,
 		invites:    deps.Invites,
@@ -91,6 +97,14 @@ func (s *Service) HasOrgs() bool { return s.orgs != nil }
 // HasStaffOrgs reports whether the upstream staff organization port is wired. The
 // edge wires it only when a staff service token is configured.
 func (s *Service) HasStaffOrgs() bool { return s.staffOrgs != nil }
+
+// HasStaffUsers reports whether the upstream staff account port is wired. The
+// edge wires it only when a staff service token is configured.
+func (s *Service) HasStaffUsers() bool { return s.staffUsers != nil }
+
+// HasAccounts reports whether the account port is wired. The session sign-in
+// method routes exist only when it is.
+func (s *Service) HasAccounts() bool { return s.accounts != nil }
 
 // HasTenants reports whether the upstream tenant-resolution port is wired.
 func (s *Service) HasTenants() bool { return s.tenants != nil }

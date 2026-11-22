@@ -34,9 +34,12 @@ const (
 )
 
 // Error is a client-facing failure. Message is the exact text the edge returns.
+// Code is an optional stable machine-readable reason; the edge writes it as the
+// `code` field next to `error` only when it is set.
 type Error struct {
 	Kind    Kind
 	Message string
+	Code    string
 }
 
 // Error implements error.
@@ -45,6 +48,11 @@ func (e *Error) Error() string { return e.Message }
 // NewError builds a client-facing failure.
 func NewError(kind Kind, message string) *Error {
 	return &Error{Kind: kind, Message: message}
+}
+
+// NewCodedError builds a client-facing failure with a stable code.
+func NewCodedError(kind Kind, code, message string) *Error {
+	return &Error{Kind: kind, Message: message, Code: code}
 }
 
 // AsError reports the *Error wrapped in err, if any.

@@ -36,8 +36,10 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, dst any) bool {
 func writeAppError(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
 	message := "upstream error"
+	code := ""
 	if failure, ok := domain.AsError(err); ok {
 		message = failure.Message
+		code = failure.Code
 		switch failure.Kind {
 		case domain.KindInvalidArgument:
 			status = http.StatusBadRequest
@@ -59,7 +61,17 @@ func writeAppError(w http.ResponseWriter, err error) {
 			status = http.StatusServiceUnavailable
 		}
 	}
-	writeJSON(w, status, map[string]string{"error": message})
+	writeJSON(w, status, errorEnvelope(message, code))
+}
+
+// errorEnvelope is the edge's error envelope. The code is added only when the
+// failure carries one, so every error that had no code keeps its old body.
+func errorEnvelope(message, code string) map[string]string {
+	body := map[string]string{"error": message}
+	if code != "" {
+		body["code"] = code
+	}
+	return body
 }
 
 // writeLimitError renders a rejected or unavailable rate-limit check. A denied

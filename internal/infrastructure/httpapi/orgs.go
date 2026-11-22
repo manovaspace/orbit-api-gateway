@@ -421,6 +421,18 @@ func (h *handlers) suspendMember(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, revokeResponse{Status: "suspended"})
 }
 
+func (h *handlers) reactivateMember(w http.ResponseWriter, r *http.Request) {
+	token, ok := h.requireBearer(w, r)
+	if !ok {
+		return
+	}
+	if err := h.svc.ReactivateMember(r.Context(), r.PathValue("org_id"), r.PathValue("user_id"), token); err != nil {
+		writeAppError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, revokeResponse{Status: "reactivated"})
+}
+
 func (h *handlers) setMemberRole(w http.ResponseWriter, r *http.Request) {
 	token, ok := h.requireBearer(w, r)
 	if !ok {

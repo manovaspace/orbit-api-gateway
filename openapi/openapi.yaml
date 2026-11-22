@@ -621,6 +621,10 @@ paths:
                 return_to:
                   type: string
                   description: A path on the product's origin. Empty means "/".
+                invite_token:
+                  type: string
+                  writeOnly: true
+                  description: Optional invitation token. Trimmed; over 512 bytes is 400 `invite_invalid`. Never logged.
       responses:
         "200":
           description: Authorization URL and state issued
@@ -647,6 +651,12 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "429":
           description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "412":
+          description: The invitation needs a password sign-in (`invite_needs_password`)
           content:
             application/json:
               schema:
@@ -719,6 +729,18 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "429":
           description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: The email does not match the invitation (`google_email_mismatch`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "412":
+          description: Sign-up is disabled for the invitation (`sign_up_disabled`)
           content:
             application/json:
               schema:
@@ -1069,6 +1091,70 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
           description: Refused because this is the last active member or the last active owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/orgs/{org_id}/members/{user_id}/reactivate:
+    post:
+      operationId: orgMemberReactivate
+      summary: Lift a user's membership suspension
+      description: >
+        Lifts the suspension of one membership. The caller must be an owner, or an
+        admin reactivating a plain member. A membership that is not suspended is
+        left unchanged.
+      parameters:
+        - name: org_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Member reactivated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemberStatusChange"
+        "400":
+          description: Invalid organization or user id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Caller is not an organization owner or admin, or may not act on this member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Organization, user or membership not found
           content:
             application/json:
               schema:
@@ -1778,6 +1864,346 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/session/sign-in-methods:
+    get:
+      operationId: sessionSignInMethods
+      summary: The caller's sign-in methods
+      description: >
+        Lists how the account of the bearer access token signs in: whether it has
+        a password, its linked Google account and its contact identifiers. Optional
+        strings are null when unset. The answer is never cacheable.
+      responses:
+        "200":
+          description: Sign-in methods
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignInMethods"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/session/password:
+    put:
+      operationId: sessionPasswordSet
+      summary: Set or change the caller's password
+      description: >
+        Sets the password of the bearer access token's account. The current
+        password is required only when the account already has one. The password
+        change has a budget of 5 attempts per subject per 15 minutes, on top of the
+        per-IP budget. A wrong current password is 403 with code
+        `invalid_credentials`. `refresh_token` names the session to keep; the
+        other sessions are not revoked by this call.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [new_password]
+              properties:
+                current_password:
+                  type: string
+                  writeOnly: true
+                new_password:
+                  type: string
+                  writeOnly: true
+                refresh_token:
+                  type: string
+                  writeOnly: true
+      responses:
+        "204":
+          description: Password set
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+        "400":
+          description: Invalid request, `password_required`, `password_too_short` or `invalid_refresh`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: The current password is not correct (`invalid_credentials`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: The account has no verified email, mobile or username to sign in with (`no_password_identifier`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/session/google/link/start:
+    post:
+      operationId: sessionGoogleLinkStart
+      summary: Start linking a Google account
+      description: >
+        Returns the Google authorization URL and the single-use state for linking a
+        Google account to the bearer access token's account. The answer is never
+        cacheable. When Google sign-in is off the edge answers 404.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                redirect_uri:
+                  type: string
+                return_to:
+                  type: string
+      responses:
+        "200":
+          description: Authorization URL and state issued
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoogleSignInStarted"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Google sign-in is off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Google is already linked to this account (`google_already_linked`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/session/google/link/complete:
+    post:
+      operationId: sessionGoogleLinkComplete
+      summary: Complete linking a Google account
+      description: >
+        Exchanges the link state and the Google authorization code. It links the
+        Google account and issues no tokens. The answer is never cacheable.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [state, code]
+              properties:
+                state:
+                  type: string
+                  writeOnly: true
+                code:
+                  type: string
+                  writeOnly: true
+      responses:
+        "200":
+          description: Google account linked
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoogleLinked"
+        "400":
+          description: The link attempt expired or failed (`state_expired`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Google sign-in is off
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: The Google account is linked to another account (`google_identity_taken`) or this account already has one (`google_already_linked`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/session/google:
+    delete:
+      operationId: sessionGoogleUnlink
+      summary: Unlink the Google account
+      description: >
+        Removes the linked Google account of the bearer access token's account. The
+        last sign-in method cannot be removed.
+      responses:
+        "204":
+          description: Google account unlinked
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+        "404":
+          description: Google sign-in is off, or Google is not linked (`google_not_linked`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: It is the last sign-in method (`last_sign_in_method`)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/session/revoke-all:
+    post:
+      operationId: sessionRevokeAll
+      summary: Revoke the caller's sessions
+      description: >
+        Revokes every refresh token of the bearer access token's account. When
+        `refresh_token` is given, that one session is kept.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+                  writeOnly: true
+      responses:
+        "204":
+          description: Sessions revoked
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid access token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /api/v1/flags:
     get:
       operationId: flagsList
@@ -1988,6 +2414,386 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: Organization not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Staff rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: Staff service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/staff/users:
+    get:
+      operationId: staffUsersList
+      summary: List accounts
+      description: >
+        Staff only. Pages through accounts, oldest first. `q` matches the email,
+        mobile number, username or display name, case-insensitively. Reads carry
+        no reason.
+      security:
+        - staffKeycloakBearer: []
+      parameters:
+        - name: q
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [active, disabled, signup_pending]
+        - name: page_token
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: page_size
+          in: query
+          required: false
+          description: At most 100. Zero or absent means the default page size.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100
+      responses:
+        "200":
+          description: One page of accounts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffUserPage"
+        "400":
+          description: Invalid page_size
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid staff token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Not a Keycloak staff token with an allowed group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Staff rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: Staff service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/staff/users/{user_id}:
+    get:
+      operationId: staffUserGet
+      summary: Get one account with its organization memberships
+      description: >
+        Staff only. Returns the account without any password hash, token or
+        hash of either, with every organization membership it has.
+      security:
+        - staffKeycloakBearer: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The account and its memberships
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffUserDetail"
+        "400":
+          description: Invalid user id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid staff token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Not a Keycloak staff token with an allowed group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Staff rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: Staff service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/staff/users/{user_id}/disable:
+    post:
+      operationId: staffUserDisable
+      summary: Disable an account
+      description: >
+        Staff only. Disables an active account and revokes every refresh token it
+        has. A still-valid access token keeps working for at most 15 minutes. An
+        already disabled account is not an error. Answers the account as it is
+        afterwards. `reason` is recorded with the change.
+      security:
+        - staffKeycloakBearer: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffUserReasonRequest"
+      responses:
+        "200":
+          description: The account as it is afterwards
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffUser"
+        "400":
+          description: Invalid JSON, invalid user id, or missing or too long `reason`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid staff token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Not a Keycloak staff token with an allowed group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: The account is pending sign-up and cannot be disabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Staff rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: Staff service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/staff/users/{user_id}/enable:
+    post:
+      operationId: staffUserEnable
+      summary: Enable a disabled account
+      description: >
+        Staff only. Makes a disabled account active again. The user signs in again;
+        refresh tokens revoked by the disable are not restored. An active account is
+        not an error. Answers the account as it is afterwards. `reason` is recorded
+        with the change.
+      security:
+        - staffKeycloakBearer: []
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffUserReasonRequest"
+      responses:
+        "200":
+          description: The account as it is afterwards
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffUser"
+        "400":
+          description: Invalid JSON, invalid user id, or missing or too long `reason`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid staff token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Not a Keycloak staff token with an allowed group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: The account is pending sign-up and cannot be enabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Staff rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: Staff service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/staff/audit-events:
+    get:
+      operationId: staffAuditEventsList
+      summary: List audit rows for an organization or a user
+      description: >
+        Staff only. Pages through audit rows, newest first. At least one of `org_id`
+        and `user_id` is required. Audit rows never hold an email address, a mobile
+        number, a password, a token or a hash. Reads carry no reason.
+      security:
+        - staffKeycloakBearer: []
+      parameters:
+        - name: org_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: user_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: page_token
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: page_size
+          in: query
+          required: false
+          description: At most 100. Zero or absent means the default page size.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 100
+      responses:
+        "200":
+          description: One page of audit rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffAuditEventPage"
+        "400":
+          description: Neither org_id nor user_id given, an invalid id, or an invalid page_size
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid staff token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Not a Keycloak staff token with an allowed group
           content:
             application/json:
               schema:
@@ -2222,6 +3028,142 @@ components:
           description: >
             The raw owner token. Returned only for a phone owner, and only by this
             response; it is never returned again.
+    StaffUser:
+      type: object
+      required: [id, status, email_verified, mobile_verified, has_password, google_linked, created_at, membership_count]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        mobile:
+          type: string
+        username:
+          type: string
+        display_name:
+          type: string
+        status:
+          type: string
+          enum: [active, disabled, signup_pending]
+        email_verified:
+          type: boolean
+        mobile_verified:
+          type: boolean
+        has_password:
+          type: boolean
+        google_linked:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        last_login_at:
+          type: string
+          format: date-time
+          description: Omitted when the account never signed in.
+        disabled_at:
+          type: string
+          format: date-time
+          description: Omitted unless the account is disabled.
+        disabled_reason:
+          type: string
+        membership_count:
+          type: integer
+    StaffUserMembership:
+      type: object
+      required: [org_id, org_name, org_slug, org_status, role, status, joined_at]
+      properties:
+        org_id:
+          type: string
+          format: uuid
+        org_name:
+          type: string
+        org_slug:
+          type: string
+        org_status:
+          type: string
+          enum: [active, suspended]
+        role:
+          type: string
+          enum: [owner, admin, member]
+        status:
+          type: string
+          enum: [active, invited, suspended]
+        joined_at:
+          type: string
+          format: date-time
+    StaffUserDetail:
+      type: object
+      required: [user, memberships]
+      properties:
+        user:
+          $ref: "#/components/schemas/StaffUser"
+        memberships:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaffUserMembership"
+    StaffUserPage:
+      type: object
+      required: [users, next_page_token]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaffUser"
+        next_page_token:
+          type: string
+          description: Empty on the last page.
+    StaffUserReasonRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Audited reason, trimmed. Required.
+    StaffAuditEvent:
+      type: object
+      required: [id, occurred_at, action, actor_kind, details]
+      properties:
+        id:
+          type: integer
+          format: int64
+        occurred_at:
+          type: string
+          format: date-time
+        action:
+          type: string
+        actor_kind:
+          type: string
+          enum: [user, staff, system]
+        actor_id:
+          type: string
+          description: The user id for a user actor, the staff subject for a staff actor; omitted for a system actor.
+        org_id:
+          type: string
+          format: uuid
+        subject_user_id:
+          type: string
+          format: uuid
+        invite_id:
+          type: string
+        reason:
+          type: string
+        details:
+          type: object
+          description: A JSON object. Never holds an email address, a mobile number, a password, a token or a hash.
+    StaffAuditEventPage:
+      type: object
+      required: [events, next_page_token]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaffAuditEvent"
+        next_page_token:
+          type: string
+          description: Empty on the last page.
     TokenPair:
       type: object
       required:
@@ -2253,6 +3195,9 @@ components:
       properties:
         error:
           type: string
+        code:
+          type: string
+          description: Stable machine-readable reason, present only on refusals that carry one.
     SignupAccepted:
       type: object
       required:
@@ -2544,7 +3489,7 @@ components:
       properties:
         status:
           type: string
-          enum: [added, removed, suspended]
+          enum: [added, removed, suspended, reactivated]
     FeatureFlag:
       type: object
       required:
@@ -2593,6 +3538,68 @@ components:
             return_to:
               type: string
               description: The return path given at start, "/" when it was empty.
+            invite_id:
+              type: string
+              description: The invitation the sign-in accepted. Present only for an invitation.
+            org_id:
+              type: string
+              description: The invitation's organization. Present only for an invitation.
+            org_slug:
+              type: string
+              description: The organization slug. Omitted when empty.
+            role:
+              type: string
+              description: The role granted by the invitation. Omitted when empty.
+            already_member:
+              type: boolean
+              description: Whether the account was already a member. Present only for an invitation.
+    SignInMethods:
+      type: object
+      required:
+        - has_password
+        - google
+        - email_verified
+        - mobile_verified
+      properties:
+        has_password:
+          type: boolean
+        google:
+          type: array
+          items:
+            $ref: "#/components/schemas/SignInMethodGoogle"
+        username:
+          type: [string, "null"]
+        email:
+          type: [string, "null"]
+        email_verified:
+          type: boolean
+        mobile:
+          type: [string, "null"]
+        mobile_verified:
+          type: boolean
+    SignInMethodGoogle:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+        linked_at:
+          type: [string, "null"]
+          format: date-time
+        last_login_at:
+          type: [string, "null"]
+          format: date-time
+    GoogleLinked:
+      type: object
+      required:
+        - email
+        - return_to
+      properties:
+        email:
+          type: string
+        return_to:
+          type: string
     SessionUsername:
       type: object
       required:

@@ -102,3 +102,8 @@ func (s *Service) SelectOrg(ctx context.Context, orgID, refreshToken, accessToke
 func (s *Service) CheckKeyLimit(ctx context.Context, key string, policy domain.Policy) (domain.Decision, error) {
 	return s.allow(ctx, key, policy)
 }
+
+// ReactivateMember lifts the suspension of a user's membership.
+func (s *Service) ReactivateMember(ctx context.Context, orgID, userID, accessToken string) error {
+	return s.orgs.ReactivateMember(ctx, orgID, userID, accessToken)
+}

@@ -26,13 +26,15 @@ import (
 type authUpstreamStub struct {
 	authv1.UnimplementedAuthServiceServer
 
-	mu                    sync.Mutex
-	err                   error
-	startReq              *authv1.StartGoogleSignInRequest
-	completeReq           *authv1.CompleteGoogleSignInRequest
-	usernameReq           *authv1.SetUsernameRequest
-	googleCalls           int
-	usernameCalls         int
+	mu            sync.Mutex
+	err           error
+	startReq      *authv1.StartGoogleSignInRequest
+	completeReq   *authv1.CompleteGoogleSignInRequest
+	usernameReq   *authv1.SetUsernameRequest
+	googleCalls   int
+	usernameCalls int
+	// inviteResp, when set, is the completion answer instead of the plain one.
+	inviteResp            *authv1.CompleteGoogleSignInResponse
 	googleAuthorization   string
 	usernameAuthorization string
 }
@@ -57,6 +59,9 @@ func (s *authUpstreamStub) CompleteGoogleSignIn(ctx context.Context, in *authv1.
 	s.googleAuthorization = firstMetadata(ctx, "authorization")
 	if s.err != nil {
 		return nil, s.err
+	}
+	if s.inviteResp != nil {
+		return s.inviteResp, nil
 	}
 	return &authv1.CompleteGoogleSignInResponse{
 		Tokens: &authv1.TokenResponse{
