@@ -56,7 +56,10 @@ const (
 	// before authentication, so one client cannot flood orbit-auth with junk
 	// tokens.
 	OrgRouteIPLimit = 300
-	RouteWindow     = time.Minute
+	// StaffOrgRouteLimit is the per-staff-subject budget for each staff
+	// organization route.
+	StaffOrgRouteLimit = 30
+	RouteWindow        = time.Minute
 )
 
 // Policy describes one token-bucket class.
@@ -121,6 +124,12 @@ func IPRoutePolicy(route string, limit int) Policy {
 // route template is the class and the rate-limit key's route name.
 func OrgRoutePolicy(route string) Policy {
 	return Policy{Class: route, Limit: OrgRouteLimit, Window: RouteWindow}
+}
+
+// StaffOrgRoutePolicy is the per-staff-subject budget for a staff organization
+// route. The route template is the class and the rate-limit key's route name.
+func StaffOrgRoutePolicy(route string) Policy {
+	return Policy{Class: route, Limit: StaffOrgRouteLimit, Window: RouteWindow}
 }
 
 // GoogleSignInPolicy is the per-IP budget for the Google sign-in routes. It is

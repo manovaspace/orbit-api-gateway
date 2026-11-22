@@ -13,10 +13,10 @@ func (s *Service) CheckClassLimit(ctx context.Context, class, clientIP string) (
 	return s.allow(ctx, domain.ClientKey(class, clientIP), domain.PolicyFor(class))
 }
 
-// CheckStaffLimit applies one route class policy to a Keycloak-authenticated
-// staff caller, keyed on the staff subject.
-func (s *Service) CheckStaffLimit(ctx context.Context, class, staffSubject string) (domain.Decision, error) {
-	return s.allow(ctx, domain.StaffKey(class, staffSubject), domain.PolicyFor(class))
+// CheckStaffLimit applies one policy to a Keycloak-authenticated staff caller,
+// keyed on the staff subject and the policy's class.
+func (s *Service) CheckStaffLimit(ctx context.Context, policy domain.Policy, staffSubject string) (domain.Decision, error) {
+	return s.allow(ctx, domain.StaffKey(policy.Class, staffSubject), policy)
 }
 
 // allow is the single place that turns limiter errors and denials into the

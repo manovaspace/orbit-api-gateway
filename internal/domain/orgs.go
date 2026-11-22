@@ -57,6 +57,9 @@ type InviteRequest struct {
 	Email string
 	Phone string
 	Role  string
+	// AcceptURL is the optional acceptance page of the product. orbit-auth
+	// validates it; the edge only trims and bounds its length.
+	AcceptURL string
 }
 
 // CreatedInvite is the result of an invitation write. Token is the raw invitation
@@ -85,6 +88,11 @@ func NormalizeInviteRequest(in InviteRequest) (InviteRequest, error) {
 	default:
 		return InviteRequest{}, NewError(KindInvalidArgument, "role must be owner, admin or member")
 	}
+	acceptURL, err := NormalizeAcceptURL(in.AcceptURL)
+	if err != nil {
+		return InviteRequest{}, err
+	}
+	in.AcceptURL = acceptURL
 	return in, nil
 }
 

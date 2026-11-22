@@ -106,7 +106,7 @@ func (s *orgSignupStub) GetInvitePreview(ctx context.Context, in *authv1.GetInvi
 	if err := s.record(ctx); err != nil {
 		return nil, err
 	}
-	return &authv1.InvitePreview{OrgId: "org-1", OrgName: "Acme", OrgSlug: "acme", Role: "admin", ExpiresAt: "2026-11-09T10:00:00Z"}, nil
+	return &authv1.InvitePreview{OrgId: "org-1", OrgName: "Acme", OrgSlug: "acme", Role: "admin", ExpiresAt: "2026-11-09T10:00:00Z", Channel: "email", AccountExists: true}, nil
 }
 
 func (s *orgSignupStub) AcceptInviteWithSignup(ctx context.Context, in *authv1.AcceptInviteWithSignupRequest) (*authv1.AcceptInviteWithSignupResponse, error) {
@@ -114,7 +114,7 @@ func (s *orgSignupStub) AcceptInviteWithSignup(ctx context.Context, in *authv1.A
 	if err := s.record(ctx); err != nil {
 		return nil, err
 	}
-	return &authv1.AcceptInviteWithSignupResponse{UserId: "user-9", OrgId: "org-1"}, nil
+	return &authv1.AcceptInviteWithSignupResponse{UserId: "user-9", OrgId: "org-1", InviteId: "invite-9", Role: "member", Identifier: "+989121234567"}, nil
 }
 
 func (s *orgSignupStub) AcceptInvite(ctx context.Context, in *authv1.AcceptInviteRequest) (*authv1.AcceptInviteResponse, error) {

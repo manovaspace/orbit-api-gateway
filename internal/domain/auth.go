@@ -28,6 +28,9 @@ const (
 	KindConflict
 	// KindBadGateway is an upstream failure with no client-safe detail.
 	KindBadGateway
+	// KindUnavailable is a dependency the edge cannot reach or has not
+	// configured, such as the staff service behind a refused token.
+	KindUnavailable
 )
 
 // Error is a client-facing failure. Message is the exact text the edge returns.

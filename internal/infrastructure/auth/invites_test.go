@@ -17,14 +17,14 @@ func TestInviteMemberForwardsPhoneAndRoleAndReturnsTheTokenOnlyForPhone(t *testi
 	client, stub := dialOrgStub(t, nil)
 	ctx := context.Background()
 
-	phone, err := client.InviteMember(ctx, domain.InviteRequest{OrgID: "org-1", Phone: "+989121234567", Role: "admin"}, "token-1")
+	phone, err := client.InviteMember(ctx, domain.InviteRequest{OrgID: "org-1", Phone: "+989121234567", Role: "admin", AcceptURL: "https://acme.falak.demo.manova.space/invite"}, "token-1")
 	if err != nil {
 		t.Fatalf("phone InviteMember err = %v", err)
 	}
 	if phone.Token != "raw-phone-token" || phone.Invite.Phone != "+989121234567" || phone.Invite.Role != "admin" {
 		t.Fatalf("phone InviteMember = %+v", phone)
 	}
-	if got := stub.inviteReq; got.GetPhone() != "+989121234567" || got.GetRole() != "admin" || got.GetEmail() != "" {
+	if got := stub.inviteReq; got.GetPhone() != "+989121234567" || got.GetRole() != "admin" || got.GetEmail() != "" || got.GetAcceptUrl() != "https://acme.falak.demo.manova.space/invite" {
 		t.Fatalf("forwarded request = %+v", got)
 	}
 
@@ -44,7 +44,7 @@ func TestGetInvitePreviewReturnsTheOrganizationAndNoRecipient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetInvitePreview err = %v", err)
 	}
-	want := domain.InvitePreview{OrgID: "org-1", OrgName: "Acme", OrgSlug: "acme", Role: "admin", ExpiresAt: "2026-11-09T10:00:00Z"}
+	want := domain.InvitePreview{OrgID: "org-1", OrgName: "Acme", OrgSlug: "acme", Role: "admin", ExpiresAt: "2026-11-09T10:00:00Z", Channel: "email", AccountExists: true}
 	if preview != want {
 		t.Fatalf("GetInvitePreview = %+v, want %+v", preview, want)
 	}
@@ -60,7 +60,7 @@ func TestAcceptInviteWithSignupForwardsTheFieldsAndReturnsTheAccount(t *testing.
 	if err != nil {
 		t.Fatalf("AcceptInviteWithSignup err = %v", err)
 	}
-	if accepted != (domain.InviteAcceptance{UserID: "user-9", OrgID: "org-1"}) {
+	if accepted != (domain.InviteAcceptance{UserID: "user-9", OrgID: "org-1", InviteID: "invite-9", Role: "member", Identifier: "+989121234567"}) {
 		t.Fatalf("AcceptInviteWithSignup = %+v", accepted)
 	}
 	if got := stub.signupReq; got.GetToken() != "secret-token" || got.GetPassword() != "correct horse" || got.GetDisplayName() != "Sara" {

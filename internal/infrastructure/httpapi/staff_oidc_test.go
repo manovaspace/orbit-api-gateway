@@ -147,7 +147,7 @@ func newOIDCFixture(t *testing.T, svc *application.Service, hs256Disabled bool) 
 	jwks := newJWKSServer(t, map[string]*rsa.PublicKey{"kid-1": &key.PublicKey})
 	verifier, err := staffoidc.New(staffoidc.Config{
 		Issuer:        testIssuer,
-		Audience:      testAudience,
+		Audiences:     []string{testAudience},
 		AllowedGroups: []string{"dev", "admins"},
 		JWKSURL:       jwks.URL,
 		Clock:         clock,
@@ -380,7 +380,7 @@ func TestKeycloakJWKSServerDown(t *testing.T) {
 
 	verifier, err := staffoidc.New(staffoidc.Config{
 		Issuer:        testIssuer,
-		Audience:      testAudience,
+		Audiences:     []string{testAudience},
 		AllowedGroups: []string{"dev"},
 		JWKSURL:       url,
 		Clock:         clock,
@@ -530,7 +530,7 @@ func TestKeycloakStaffRateLimitedPerSubject(t *testing.T) {
 		Limiter: ratelimit.New(ratelimiting.NewMemoryLimiter()),
 	})
 	f := newOIDCFixture(t, svc, false)
-	handler := f.tokens.RequireStaff(f.tokens.StaffRateLimit(domain.ClassAuthRefresh, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := f.tokens.RequireStaff(f.tokens.StaffRateLimit(domain.PolicyFor(domain.ClassAuthRefresh), http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})))
 
@@ -556,7 +556,7 @@ func TestKeycloakStaffRateLimitedPerSubject(t *testing.T) {
 }
 
 func TestStaffOIDCVerifierFailsClosedWithoutGroups(t *testing.T) {
-	verifier, err := staffoidc.New(staffoidc.Config{Issuer: testIssuer, Audience: testAudience})
+	verifier, err := staffoidc.New(staffoidc.Config{Issuer: testIssuer, Audiences: []string{testAudience}})
 	if err != nil {
 		t.Fatalf("staffoidc.New: %v", err)
 	}
@@ -568,7 +568,7 @@ func TestStaffOIDCVerifierFailsClosedWithoutGroups(t *testing.T) {
 }
 
 func TestStaffOIDCConfigRequiresIssuerAndAudience(t *testing.T) {
-	if _, err := staffoidc.New(staffoidc.Config{Audience: testAudience}); err == nil {
+	if _, err := staffoidc.New(staffoidc.Config{Audiences: []string{testAudience}}); err == nil {
 		t.Fatal("missing issuer must be an error")
 	}
 	if _, err := staffoidc.New(staffoidc.Config{Issuer: testIssuer}); err == nil {

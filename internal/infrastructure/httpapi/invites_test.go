@@ -25,13 +25,14 @@ import (
 )
 
 const (
-	testPendingToken = "tok-pending-secret"
-	testUnknownToken = "tok-unknown-secret"
-	testPassword     = "correct horse battery"
-	testPreviewPath  = "/api/v1/public/invites/preview"
-	testAcceptPath   = "/api/v1/public/invites/accept"
-	testPreviewBody  = `{"token":"` + testPendingToken + `"}`
-	testAcceptBody   = `{"token":"` + testPendingToken + `","password":"` + testPassword + `","display_name":"Sara"}`
+	testPendingToken  = "tok-pending-secret"
+	testExistingToken = "tok-existing-secret"
+	testUnknownToken  = "tok-unknown-secret"
+	testPassword      = "correct horse battery"
+	testPreviewPath   = "/api/v1/public/invites/preview"
+	testAcceptPath    = "/api/v1/public/invites/accept"
+	testPreviewBody   = `{"token":"` + testPendingToken + `"}`
+	testAcceptBody    = `{"token":"` + testPendingToken + `","password":"` + testPassword + `","display_name":"Sara"}`
 )
 
 // inviteOrgsFake stands in for the OrgService port with only the invitation
@@ -78,9 +79,10 @@ type invitePortFake struct {
 func newInvitePortFake() *invitePortFake {
 	return &invitePortFake{
 		pending: map[string]domain.InvitePreview{
-			testPendingToken: {OrgID: "org-1", OrgName: "Acme", OrgSlug: "acme", Role: "admin", ExpiresAt: "2026-11-09T10:00:00Z"},
+			testPendingToken:  {OrgID: "org-1", OrgName: "Acme", OrgSlug: "acme", Role: "admin", ExpiresAt: "2026-11-09T10:00:00Z", Channel: "phone"},
+			testExistingToken: {OrgID: "org-1", OrgName: "Acme", OrgSlug: "acme", Role: "member", ExpiresAt: "2026-11-09T10:00:00Z", Channel: "email", AccountExists: true},
 		},
-		accepted: domain.InviteAcceptance{UserID: "user-9", OrgID: "org-1"},
+		accepted: domain.InviteAcceptance{UserID: "user-9", OrgID: "org-1", InviteID: "invite-9", Role: "member", Identifier: "+989121234567"},
 	}
 }
 
@@ -304,7 +306,7 @@ func TestPublicInvitePreviewShowsTheOrganizationAndNoRecipient(t *testing.T) {
 	if got.Status != http.StatusOK {
 		t.Fatalf("status = %d, want 200", got.Status)
 	}
-	want := `{"org_id":"org-1","org_name":"Acme","org_slug":"acme","role":"admin","expires_at":"2026-11-09T10:00:00Z"}` + "\n"
+	want := `{"org_id":"org-1","org_name":"Acme","org_slug":"acme","role":"admin","expires_at":"2026-11-09T10:00:00Z","channel":"phone","account_exists":false}` + "\n"
 	if got.Body != want {
 		t.Fatalf("body = %q, want %q", got.Body, want)
 	}
@@ -359,7 +361,7 @@ func TestPublicInviteAcceptCreatesTheAccountAndForwardsTheFields(t *testing.T) {
 	if got.Status != http.StatusCreated {
 		t.Fatalf("status = %d, want 201", got.Status)
 	}
-	if want := `{"user_id":"user-9","org_id":"org-1"}` + "\n"; got.Body != want {
+	if want := `{"user_id":"user-9","org_id":"org-1","invite_id":"invite-9","role":"member","identifier":"+989121234567"}` + "\n"; got.Body != want {
 		t.Fatalf("body = %q, want %q", got.Body, want)
 	}
 	signups := port.forwardedSignups()
@@ -620,5 +622,66 @@ func TestPublicInviteRoutesAreAbsentWithoutTheInvitePort(t *testing.T) {
 	}
 	if got := send(t, base, http.MethodPost, testAcceptPath, testAcceptBody, nil); got.Status != http.StatusMethodNotAllowed {
 		t.Fatalf("accept status = %d, want 405", got.Status)
+	}
+}
+
+// The preview answers channel and account_exists on every answer, so a client
+// can tell a phone invitation from an email one and a taken address before sign-in.
+func TestPublicInvitePreviewCarriesChannelAndAccountExists(t *testing.T) {
+	base := newInviteTestServer(t, nil, newInvitePortFake(), nil, nil)
+
+	got := send(t, base, http.MethodPost, testPreviewPath, `{"token":"`+testExistingToken+`"}`, nil)
+	if got.Status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", got.Status)
+	}
+	want := `{"org_id":"org-1","org_name":"Acme","org_slug":"acme","role":"member","expires_at":"2026-11-09T10:00:00Z","channel":"email","account_exists":true}` + "\n"
+	if got.Body != want {
+		t.Fatalf("body = %q, want %q", got.Body, want)
+	}
+}
+
+// accept_url is optional and trimmed before orbit-auth sees it. orbit-auth does the
+// real validation; its InvalidArgument answer is a 400 with its own message.
+func TestCreateInviteForwardsTheTrimmedAcceptURL(t *testing.T) {
+	orgs := &inviteOrgsFake{created: domain.CreatedInvite{Invite: domain.Invite{
+		ID: "invite-1", OrgID: "org-1", Email: "person@example.com", InviterID: "user-1",
+		Status: "pending", ExpiresAt: "2026-11-09T10:00:00Z", CreatedAt: "2026-11-02T10:00:00Z",
+	}}}
+	base := newInviteTestServer(t, orgs, nil, nil, nil)
+
+	got := send(t, base, http.MethodPost, "/api/v1/orgs/org-1/invites",
+		`{"email":"person@example.com","accept_url":"  https://acme.falak.demo.manova.space/invite  "}`, bearer())
+	if got.Status != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %q)", got.Status, got.Body)
+	}
+	requests, _ := orgs.forwarded()
+	if len(requests) != 1 || requests[0].AcceptURL != "https://acme.falak.demo.manova.space/invite" {
+		t.Fatalf("forwarded requests = %+v", requests)
+	}
+}
+
+func TestCreateInviteRejectsAnOverlongAcceptURLBeforeOrbitAuth(t *testing.T) {
+	orgs := &inviteOrgsFake{}
+	base := newInviteTestServer(t, orgs, nil, nil, nil)
+
+	long := strings.Repeat("a", 501)
+	got := send(t, base, http.MethodPost, "/api/v1/orgs/org-1/invites",
+		`{"email":"person@example.com","accept_url":"`+long+`"}`, bearer())
+	if got.Status != http.StatusBadRequest || got.Body != `{"error":"accept_url is too long"}`+"\n" {
+		t.Fatalf("got %d %q, want 400 accept_url is too long", got.Status, got.Body)
+	}
+	if requests, _ := orgs.forwarded(); len(requests) != 0 {
+		t.Fatalf("overlong accept_url reached orbit-auth: %+v", requests)
+	}
+}
+
+func TestCreateInviteRendersOrbitAuthsInvalidAcceptURLAs400(t *testing.T) {
+	orgs := &inviteOrgsFake{err: domain.NewError(domain.KindInvalidArgument, "invalid accept_url")}
+	base := newInviteTestServer(t, orgs, nil, nil, nil)
+
+	got := send(t, base, http.MethodPost, "/api/v1/orgs/org-1/invites",
+		`{"email":"person@example.com","accept_url":"http://example.com/invite"}`, bearer())
+	if got.Status != http.StatusBadRequest || got.Body != `{"error":"invalid accept_url"}`+"\n" {
+		t.Fatalf("got %d %q, want 400 invalid accept_url", got.Status, got.Body)
 	}
 }

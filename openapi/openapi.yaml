@@ -1347,11 +1347,12 @@ paths:
       summary: Accept a phone invitation by creating the account
       description: >
         Public. The token travels in the JSON body, never in the URL. Creates the
-        account for a phone invitation, sets its password and display name, and joins
-        the organization with the invited tier. The account's mobile number is the
-        invited number and is not verified. If an account already uses the number the
-        answer is 409 `account_exists`: that person signs in and accepts with
-        POST /api/v1/invites/accept instead. Email invitations are not accepted here.
+        account for an email or a phone invitation, sets its password and display name,
+        and joins the organization with the invited tier. An email invitation verifies
+        the new account's email, since the token reached only that mailbox; a phone
+        invitation's number is the invited number and is not verified. If an account
+        already uses the invited number or email the answer is 409 `account_exists`: that
+        person signs in and accepts with POST /api/v1/invites/accept instead.
       security: []
       requestBody:
         required: true
@@ -1443,6 +1444,13 @@ paths:
                   enum: [owner, admin, member]
                   default: member
                   description: Only an owner can grant owner or admin.
+                accept_url:
+                  type: string
+                  maxLength: 500
+                  description: >
+                    Optional https URL of the product's acceptance page. `{slug}` is replaced
+                    with the organization's current slug. orbit-auth checks the host against its
+                    allowed list; an invalid or not-allowed URL is 400 `invalid accept_url`.
       responses:
         "200":
           description: Invitation created or rotated
@@ -1798,6 +1806,210 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/staff/orgs:
+    post:
+      operationId: staffOrgProvision
+      summary: Provision an organization with one pending owner invitation
+      description: >
+        Staff only. Creates an organization with no members and one pending owner
+        invitation, in one transaction. A repeated `idempotency_key` with the same
+        name and owner returns the same organization and rotates the owner
+        invitation; a repeat with another name or owner is 409. `reason` is recorded
+        with the change. The raw `token` is returned only for a phone owner, once.
+      security:
+        - staffKeycloakBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffProvisionRequest"
+      responses:
+        "201":
+          description: Organization provisioned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffProvisioned"
+        "400":
+          description: Invalid JSON, missing or too long `reason` or `idempotency_key`, or not exactly one of `owner_email` and `owner_phone`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid staff token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Not a Keycloak staff token with an allowed group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Idempotency key reused with another name or owner, or the slug is taken
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Staff rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: Staff service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/staff/orgs/{org_id}:
+    get:
+      operationId: staffOrgGet
+      summary: Read an organization with its members and pending invitations
+      description: >
+        Staff only. Returns the organization, its members and its pending
+        invitations. Invitation tokens are never returned.
+      security:
+        - staffKeycloakBearer: []
+      parameters:
+        - name: org_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Organization with members and pending invitations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffOrgDetail"
+        "400":
+          description: Organization id is not a UUID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid staff token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Not a Keycloak staff token with an allowed group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Organization not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Staff rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: Staff service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/staff/orgs/{org_id}/owner-invites:
+    post:
+      operationId: staffOrgOwnerInviteCreate
+      summary: Issue a new owner invitation for an organization
+      description: >
+        Staff only. Issues a new owner invitation to an email address or a phone
+        number and rotates the pending one for that recipient. The raw `token` is
+        returned only for a phone owner, once. `reason` is recorded with the change.
+      security:
+        - staffKeycloakBearer: []
+      parameters:
+        - name: org_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StaffOwnerInviteRequest"
+      responses:
+        "201":
+          description: Owner invitation issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffOwnerInviteCreated"
+        "400":
+          description: Invalid JSON, organization id not a UUID, missing or too long `reason`, or not exactly one of `owner_email` and `owner_phone`
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "401":
+          description: Missing or invalid staff token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Not a Keycloak staff token with an allowed group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Organization not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Staff rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: Staff service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
 components:
   securitySchemes:
     bearerAuth:
@@ -1821,6 +2033,16 @@ components:
         The break-glass reason and the target organization of a Keycloak staff
         request come from the `X-Staff-Reason` and `X-Staff-Target-Org` headers,
         never from token claims.
+    staffKeycloakBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Keycloak staff access token only: RS256, verified against the staff JWKS,
+        with the gateway's staff issuer and audience and a staff group in `groups`.
+        Legacy HS256 staff tokens are refused on these routes, whatever
+        `STAFF_HS256_ENABLED` says. Staff identity is `keycloak:` plus the token `sub`.
+        The staff reason is taken from the request body, never from a header.
   parameters:
     StaffReason:
       name: X-Staff-Reason
@@ -1843,6 +2065,163 @@ components:
       schema:
         type: string
   schemas:
+    StaffOrganization:
+      type: object
+      required: [id, name, slug, status, created_at, member_count, owner_user_ids]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        status:
+          type: string
+          enum: [active, suspended]
+        created_at:
+          type: string
+          format: date-time
+        member_count:
+          type: integer
+          description: Counts every membership, whatever its lifecycle status.
+        owner_user_ids:
+          type: array
+          items:
+            type: string
+          description: Owners whose membership is active.
+    StaffInvite:
+      type: object
+      required: [id, role, expires_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          description: Present only for an email invitation.
+        phone:
+          type: string
+          description: Present only for a phone invitation, in E.164 form.
+        role:
+          type: string
+          enum: [owner, admin, member]
+        expires_at:
+          type: string
+          format: date-time
+    StaffMember:
+      type: object
+      required: [user_id, role, status, joined_at]
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [owner, admin, member]
+        status:
+          type: string
+          enum: [active, invited, suspended]
+        joined_at:
+          type: string
+          format: date-time
+    StaffOrgDetail:
+      type: object
+      required: [organization, members, pending_invites]
+      properties:
+        organization:
+          $ref: "#/components/schemas/StaffOrganization"
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaffMember"
+        pending_invites:
+          type: array
+          items:
+            $ref: "#/components/schemas/StaffInvite"
+    StaffProvisionRequest:
+      type: object
+      required: [name, idempotency_key, reason]
+      oneOf:
+        - required: [owner_email]
+        - required: [owner_phone]
+      properties:
+        name:
+          type: string
+        slug:
+          type: string
+          description: Optional. Empty derives the slug from the name.
+        owner_email:
+          type: string
+          format: email
+          description: Set this or `owner_phone`, not both.
+        owner_phone:
+          type: string
+          description: E.164 phone number. Set this or `owner_email`, not both.
+        idempotency_key:
+          type: string
+          minLength: 1
+          maxLength: 128
+        accept_url:
+          type: string
+          maxLength: 500
+          description: >
+            Optional https URL of the product's acceptance page. `{slug}` is replaced
+            with the organization's current slug. orbit-auth checks the host against its
+            allowed list; an invalid or not-allowed URL is 400 `invalid accept_url`.
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Audited reason, trimmed. Required.
+    StaffProvisioned:
+      type: object
+      required: [organization, owner_invite]
+      properties:
+        organization:
+          $ref: "#/components/schemas/StaffOrganization"
+        owner_invite:
+          $ref: "#/components/schemas/StaffInvite"
+        token:
+          type: string
+          description: >
+            The raw owner token. Returned only for a phone owner, and only by this
+            response; it is never returned again.
+    StaffOwnerInviteRequest:
+      type: object
+      required: [reason]
+      oneOf:
+        - required: [owner_email]
+        - required: [owner_phone]
+      properties:
+        owner_email:
+          type: string
+          format: email
+        owner_phone:
+          type: string
+        accept_url:
+          type: string
+          maxLength: 500
+          description: >
+            Optional https URL of the product's acceptance page. `{slug}` is replaced
+            with the organization's current slug. orbit-auth checks the host against its
+            allowed list; an invalid or not-allowed URL is 400 `invalid accept_url`.
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Audited reason, trimmed. Required.
+    StaffOwnerInviteCreated:
+      type: object
+      required: [invite]
+      properties:
+        invite:
+          $ref: "#/components/schemas/StaffInvite"
+        token:
+          type: string
+          description: >
+            The raw owner token. Returned only for a phone owner, and only by this
+            response; it is never returned again.
     TokenPair:
       type: object
       required:
@@ -2094,6 +2473,8 @@ components:
         - org_slug
         - role
         - expires_at
+        - channel
+        - account_exists
       properties:
         org_id:
           type: string
@@ -2108,11 +2489,21 @@ components:
         expires_at:
           type: string
           format: date-time
+        channel:
+          type: string
+          enum: [email, phone]
+          description: How the invitation was delivered.
+        account_exists:
+          type: boolean
+          description: True when an active account already uses the invited phone number or email. Never says whose account it is.
     InviteSignupAccepted:
       type: object
       required:
         - user_id
         - org_id
+        - invite_id
+        - role
+        - identifier
       properties:
         user_id:
           type: string
@@ -2120,6 +2511,15 @@ components:
         org_id:
           type: string
           format: uuid
+        invite_id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [owner, admin, member]
+        identifier:
+          type: string
+          description: What the new account signs in with, its phone number in E.164 form or its email address.
     InviteList:
       type: object
       required:

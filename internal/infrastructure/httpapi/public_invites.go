@@ -48,16 +48,21 @@ type inviteSignupBody struct {
 }
 
 type invitePreviewJSON struct {
-	OrgID     string `json:"org_id"`
-	OrgName   string `json:"org_name"`
-	OrgSlug   string `json:"org_slug"`
-	Role      string `json:"role"`
-	ExpiresAt string `json:"expires_at"`
+	OrgID         string `json:"org_id"`
+	OrgName       string `json:"org_name"`
+	OrgSlug       string `json:"org_slug"`
+	Role          string `json:"role"`
+	ExpiresAt     string `json:"expires_at"`
+	Channel       string `json:"channel"`
+	AccountExists bool   `json:"account_exists"`
 }
 
 type inviteSignupJSON struct {
-	UserID string `json:"user_id"`
-	OrgID  string `json:"org_id"`
+	UserID     string `json:"user_id"`
+	OrgID      string `json:"org_id"`
+	InviteID   string `json:"invite_id"`
+	Role       string `json:"role"`
+	Identifier string `json:"identifier"`
 }
 
 // invitePreview shows what an invitation grants before sign-in. It never returns
@@ -79,11 +84,13 @@ func (h *handlers) invitePreview(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, invitePreviewJSON{
-		OrgID:     preview.OrgID,
-		OrgName:   preview.OrgName,
-		OrgSlug:   preview.OrgSlug,
-		Role:      preview.Role,
-		ExpiresAt: preview.ExpiresAt,
+		OrgID:         preview.OrgID,
+		OrgName:       preview.OrgName,
+		OrgSlug:       preview.OrgSlug,
+		Role:          preview.Role,
+		ExpiresAt:     preview.ExpiresAt,
+		Channel:       preview.Channel,
+		AccountExists: preview.AccountExists,
 	})
 }
 
@@ -108,7 +115,13 @@ func (h *handlers) inviteSignupAccept(w http.ResponseWriter, r *http.Request) {
 		writeInviteError(w, token, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, inviteSignupJSON{UserID: accepted.UserID, OrgID: accepted.OrgID})
+	writeJSON(w, http.StatusCreated, inviteSignupJSON{
+		UserID:     accepted.UserID,
+		OrgID:      accepted.OrgID,
+		InviteID:   accepted.InviteID,
+		Role:       accepted.Role,
+		Identifier: accepted.Identifier,
+	})
 }
 
 // writeInviteError renders a failure of a public invitation route. A message that
