@@ -68,6 +68,8 @@ func main() {
 		Signup:     authClient,
 		Tenants:    authClient,
 		Invites:    authClient,
+		Google:     authClient,
+		Usernames:  authClient,
 		Flags:      authClient,
 		Limiter:    limiter,
 		Clock:      clock.New(),

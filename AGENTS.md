@@ -14,7 +14,7 @@ Status: `beta`.
 
 ## Architecture
 
-- `internal/domain` — the edge's types and ports: `AuthService`, `OrgService`, `SignupService` (upstream orbit-auth), `Limiter`, `Clock`, `CodeGenerator`, `ChallengeStore`, `ClaimCache`, `Assets`. It imports no infrastructure package, HTTP framework, environment or proto.
+- `internal/domain` — the edge's types and ports: `AuthService`, `OrgService`, `SignupService`, `GoogleSignInService`, `UsernameService` (upstream orbit-auth), `Limiter`, `Clock`, `CodeGenerator`, `ChallengeStore`, `ClaimCache`, `Assets`. It imports no infrastructure package, HTTP framework, environment or proto.
 - `internal/application` — the auth, signup, organization, ownership, onboarding, static-asset and rate-limit use cases. It receives `application.Deps` and reads no environment variable.
 - `internal/infrastructure` — adapters: `httpapi` (Fiber v3 edge and health server), `auth` (orbit-auth gRPC), `ratelimit` (orbit-kit/ratelimiting memory/Redis), `memory` (challenge and claim stores), `assets` (embedded installer, OpenAPI artifacts), `jwks`, `clock`, `ids`.
 - `cmd/gateway` — wiring only.
@@ -33,7 +33,7 @@ Three paths are deliberately absent: no Postgres (so no migrations, no sqlc and 
 
 Public HTTP is **OpenAPI-first**. Commit the OpenAPI artifact under `openapi/`; serve it at `/api/v1/openapi/gateway.yaml`. Scalar handbook/infra embedding is **planned** — do not hand-maintain endpoint tables.
 
-The spec includes stable `operationId` values for every operation (`authLogin`, `authOtpRequest`, `authOtpVerify`, `authTokenRefresh`, `authSignup`, `authSignupVerify`, `orgList`, `orgCreate`, `orgMembersList`, `orgMemberAdd`, `orgMemberRemove`, `orgMemberSuspend`, `orgMemberRoleSet`, `orgSlugSet`, `tenantResolve`, `orgInviteCreate`, `orgInviteList`, `orgInviteRevoke`, `inviteAccept`, `invitePreview`, `inviteAcceptSignup`, `sessionSelectOrg`) and shared schemas (`TokenPair`, `OtpRequestResponse`, `ErrorEnvelope`). **Do not rename operationIds** without coordinating `@orbit/contracts` codegen in orbit-frontend (vendor + regenerate).
+The spec includes stable `operationId` values for every operation (`authLogin`, `authOtpRequest`, `authOtpVerify`, `authTokenRefresh`, `authSignup`, `authSignupVerify`, `authGoogleStart`, `authGoogleComplete`, `sessionUsernameSet`, `orgList`, `orgCreate`, `orgMembersList`, `orgMemberAdd`, `orgMemberRemove`, `orgMemberSuspend`, `orgMemberRoleSet`, `orgSlugSet`, `tenantResolve`, `orgInviteCreate`, `orgInviteList`, `orgInviteRevoke`, `inviteAccept`, `invitePreview`, `inviteAcceptSignup`, `sessionSelectOrg`) and shared schemas (`TokenPair`, `OtpRequestResponse`, `ErrorEnvelope`). **Do not rename operationIds** without coordinating `@orbit/contracts` codegen in orbit-frontend (vendor + regenerate).
 
 `internal/infrastructure/httpapi/openapi_test.go` parses the YAML and asserts path/method/`operationId` parity with `platformOpenAPIRoutes` (keep that table aligned with `New` auth registrations).
 
@@ -51,11 +51,14 @@ Agent routing: `openapi` / `orbit-api-gateway` in `handbook/cursor/agent-routing
 | --- | --- | --- |
 | `POST` | `/api/v1/auth/otp/request` | Upstream `orbit-auth` RequestOTP |
 | `POST` | `/api/v1/auth/otp/verify` | Upstream `orbit-auth` VerifyOTP |
-| `POST` | `/api/v1/auth/login` | Upstream `orbit-auth` LoginWithPassword (`identifier`: email or E.164 mobile) |
+| `POST` | `/api/v1/auth/login` | Upstream `orbit-auth` LoginWithPassword (`identifier`: username, E.164 mobile or email) |
 | `POST` | `/api/v1/auth/token/refresh` | Upstream `orbit-auth` RefreshToken |
 | `POST` | `/api/v1/auth/token/revoke` | Upstream `orbit-auth` RevokeRefreshToken; idempotent, answers 204 |
 | `POST` | `/api/v1/auth/signup` | Upstream `orbit-auth` SignupService RegisterWithEmail. Unauthenticated; same 202 for new and existing addresses; disabled sign-up answers 404 |
 | `POST` | `/api/v1/auth/signup/verify` | Upstream `orbit-auth` SignupService VerifySignup; returns `TokenPair` |
+| `POST` | `/api/v1/auth/google/start` | Upstream `orbit-auth` AuthService StartGoogleSignIn (`redirect_uri`, `return_to`); returns `authorization_url` and single-use `state`; `Cache-Control: no-store`; per-IP budget `auth_google` 20 a minute; Google off is 404 |
+| `POST` | `/api/v1/auth/google/complete` | Upstream `orbit-auth` AuthService CompleteGoogleSignIn (`state`, `code`); returns the `TokenPair` fields plus `return_to`; `Cache-Control: no-store`; same class; Google off is 404 |
+| `PUT` | `/api/v1/session/username` | Upstream `orbit-auth` AuthService SetUsername (`username`); bearer required and forwarded; per-IP budget 5 a minute (shared with sign-up); taken username is 409 |
 | `GET` | `/api/v1/orgs` | Upstream `orbit-auth` OrgService ListMyOrgs (bearer access token) |
 | `POST` | `/api/v1/orgs` | Upstream `orbit-auth` OrgService CreateOrg (`name`, optional `slug`; bearer access token) |
 | `GET` | `/api/v1/orgs/{org_id}/members` | Upstream `orbit-auth` OrgService ListMembers (bearer; non-member is 404) |

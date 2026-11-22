@@ -19,7 +19,8 @@ import (
 )
 
 // Client implements domain.AuthService, domain.OrgService, domain.TenantService,
-// domain.InviteService, domain.SignupService and domain.FlagSource over gRPC and
+// domain.InviteService, domain.SignupService, domain.GoogleSignInService,
+// domain.UsernameService and domain.FlagSource over gRPC and
 // orbit-auth's HTTP surface.
 type Client struct {
 	api    authv1.AuthServiceClient
@@ -36,12 +37,14 @@ type Client struct {
 }
 
 var (
-	_ domain.AuthService   = (*Client)(nil)
-	_ domain.OrgService    = (*Client)(nil)
-	_ domain.TenantService = (*Client)(nil)
-	_ domain.InviteService = (*Client)(nil)
-	_ domain.SignupService = (*Client)(nil)
-	_ domain.FlagSource    = (*Client)(nil)
+	_ domain.AuthService         = (*Client)(nil)
+	_ domain.OrgService          = (*Client)(nil)
+	_ domain.TenantService       = (*Client)(nil)
+	_ domain.InviteService       = (*Client)(nil)
+	_ domain.SignupService       = (*Client)(nil)
+	_ domain.FlagSource          = (*Client)(nil)
+	_ domain.GoogleSignInService = (*Client)(nil)
+	_ domain.UsernameService     = (*Client)(nil)
 )
 
 // NewClient dials the upstream auth service. The caller closes the client.

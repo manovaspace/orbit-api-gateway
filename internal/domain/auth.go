@@ -94,7 +94,8 @@ type OTPVerification struct {
 	Code       string
 }
 
-// PasswordLogin is a password login by email address or E.164 mobile number.
+// PasswordLogin is a password login by username, E.164 mobile number or email
+// address.
 type PasswordLogin struct {
 	Identifier string
 	Email      string

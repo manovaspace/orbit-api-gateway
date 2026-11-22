@@ -38,8 +38,9 @@ func (s *Service) VerifyOTP(ctx context.Context, in domain.OTPVerification) (dom
 	return s.auth.VerifyOTP(ctx, in)
 }
 
-// Login exchanges a password for a token pair. The identifier is the E.164
-// mobile number or email address; the deprecated email field is the fallback.
+// Login exchanges a password for a token pair. The identifier is a username,
+// an E.164 mobile number or an email address; the deprecated email field is the
+// fallback.
 func (s *Service) Login(ctx context.Context, in domain.PasswordLogin) (domain.TokenPair, error) {
 	identifier := in.Identifier
 	if identifier == "" {
@@ -78,4 +79,16 @@ func (s *Service) checkIdentifierLimit(ctx context.Context, identifier string) (
 		return nil, err
 	}
 	return &decision, nil
+}
+
+// StartGoogleSignIn begins a Google sign-in and returns the browser redirect and
+// its single-use state.
+func (s *Service) StartGoogleSignIn(ctx context.Context, in domain.GoogleSignInStart) (domain.GoogleSignInStarted, error) {
+	return s.google.StartGoogleSignIn(ctx, in)
+}
+
+// CompleteGoogleSignIn exchanges the state and the code Google returned for a
+// token pair and the return path given at start.
+func (s *Service) CompleteGoogleSignIn(ctx context.Context, state, code string) (domain.GoogleSignInCompletion, error) {
+	return s.google.CompleteGoogleSignIn(ctx, state, code)
 }

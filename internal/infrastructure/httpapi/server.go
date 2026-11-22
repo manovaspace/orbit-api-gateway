@@ -73,6 +73,18 @@ func New(svc *application.Service, opts Options) *Server {
 		mux.HandleFunc("POST /api/v1/auth/token/revoke", wrap(domain.ClassAuthRefresh, h.revokeToken))
 	}
 
+	// Google sign-in (unauthenticated; per-IP budget for the auth_google class).
+	// A disabled Google sign-in answers 404 from the adapter.
+	if svc.HasGoogleSignIn() {
+		mux.HandleFunc("POST "+routeGoogleStart, wrap(domain.ClassAuthGoogle, h.googleStart))
+		mux.HandleFunc("POST "+routeGoogleComplete, wrap(domain.ClassAuthGoogle, h.googleComplete))
+	}
+
+	// Username (bearer token required, per-IP budget shared with sign-up).
+	if svc.HasUsernames() {
+		mux.HandleFunc("PUT "+routeSessionUsername, h.wrapIP(routeSessionUsername, domain.SignupIPLimit, h.setUsername))
+	}
+
 	// Self-serve sign-up (unauthenticated, strict per-IP budget).
 	if svc.HasSignup() {
 		mux.HandleFunc("POST /api/v1/auth/signup", h.wrapIP(routeSignup, domain.SignupIPLimit, h.signup))

@@ -18,6 +18,8 @@ type Deps struct {
 	Signup     domain.SignupService
 	Tenants    domain.TenantService
 	Invites    domain.InviteService
+	Google     domain.GoogleSignInService
+	Usernames  domain.UsernameService
 	Flags      domain.FlagSource
 	Limiter    domain.Limiter
 	Clock      domain.Clock
@@ -37,6 +39,8 @@ type Service struct {
 	signup     domain.SignupService
 	tenants    domain.TenantService
 	invites    domain.InviteService
+	google     domain.GoogleSignInService
+	usernames  domain.UsernameService
 	flags      domain.FlagSource
 	limiter    domain.Limiter
 	clock      domain.Clock
@@ -60,6 +64,8 @@ func NewService(deps Deps) *Service {
 		signup:     deps.Signup,
 		tenants:    deps.Tenants,
 		invites:    deps.Invites,
+		google:     deps.Google,
+		usernames:  deps.Usernames,
 		flags:      deps.Flags,
 		limiter:    deps.Limiter,
 		clock:      deps.Clock,
@@ -88,6 +94,14 @@ func (s *Service) HasSignup() bool { return s.signup != nil }
 // HasInvites reports whether the public invitation port is wired. Without it the
 // edge does not register the public invitation routes.
 func (s *Service) HasInvites() bool { return s.invites != nil }
+
+// HasGoogleSignIn reports whether the Google sign-in port is wired. Without it
+// the edge does not register the Google sign-in routes.
+func (s *Service) HasGoogleSignIn() bool { return s.google != nil }
+
+// HasUsernames reports whether the username port is wired. Without it the edge
+// does not register the username route.
+func (s *Service) HasUsernames() bool { return s.usernames != nil }
 
 // HasFlags reports whether the upstream flag source is wired.
 func (s *Service) HasFlags() bool { return s.flags != nil }
