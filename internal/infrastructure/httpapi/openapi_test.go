@@ -46,6 +46,7 @@ var platformOpenAPIRoutes = []struct {
 	{"delete", "/api/v1/orgs/{org_id}/invites/{invite_id}", "orgInviteRevoke"},
 	{"post", "/api/v1/invites/accept", "inviteAccept"},
 	{"post", "/api/v1/public/invites/preview", "invitePreview"},
+	{"post", "/api/v1/public/invites/phone-code", "invitePhoneCodeRequest"},
 	{"post", "/api/v1/public/invites/accept", "inviteAcceptSignup"},
 	{"post", "/api/v1/session/org", "sessionSelectOrg"},
 	{"post", "/api/v1/staff/orgs", "staffOrgProvision"},

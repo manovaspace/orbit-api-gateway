@@ -23,6 +23,7 @@ type orgSignupStub struct {
 	authorization string
 	inviteReq     *authv1.InviteMemberRequest
 	signupReq     *authv1.AcceptInviteWithSignupRequest
+	phoneCodeReq  *authv1.RequestInvitePhoneCodeRequest
 	previewToken  string
 }
 
@@ -111,6 +112,14 @@ func (s *orgSignupStub) GetInvitePreview(ctx context.Context, in *authv1.GetInvi
 		return nil, err
 	}
 	return &authv1.InvitePreview{OrgId: "org-1", OrgName: "Acme", OrgSlug: "acme", Role: "admin", ExpiresAt: "2026-11-09T10:00:00Z", Channel: "email", AccountExists: true}, nil
+}
+
+func (s *orgSignupStub) RequestInvitePhoneCode(ctx context.Context, in *authv1.RequestInvitePhoneCodeRequest) (*authv1.RequestInvitePhoneCodeResponse, error) {
+	s.phoneCodeReq = in
+	if err := s.record(ctx); err != nil {
+		return nil, err
+	}
+	return &authv1.RequestInvitePhoneCodeResponse{ExpiresAt: "2026-11-23T10:05:00Z"}, nil
 }
 
 func (s *orgSignupStub) AcceptInviteWithSignup(ctx context.Context, in *authv1.AcceptInviteWithSignupRequest) (*authv1.AcceptInviteWithSignupResponse, error) {

@@ -353,6 +353,16 @@ func (c *Client) GetInvitePreview(ctx context.Context, token string) (domain.Inv
 	}, nil
 }
 
+// RequestInvitePhoneCode sends the one-time code for a phone invitation and returns
+// when it stops being valid, as orbit-auth formats it (RFC 3339).
+func (c *Client) RequestInvitePhoneCode(ctx context.Context, token string) (string, error) {
+	resp, err := c.invite.RequestInvitePhoneCode(ctx, &authv1.RequestInvitePhoneCodeRequest{Token: token})
+	if err != nil {
+		return "", invitePhoneCodeUpstreamError(err)
+	}
+	return resp.GetExpiresAt(), nil
+}
+
 // AcceptInviteWithSignup creates the account for a phone invitation and joins its
 // organization.
 func (c *Client) AcceptInviteWithSignup(ctx context.Context, in domain.InviteSignup) (domain.InviteAcceptance, error) {
@@ -360,6 +370,7 @@ func (c *Client) AcceptInviteWithSignup(ctx context.Context, in domain.InviteSig
 		Token:       in.Token,
 		Password:    in.Password,
 		DisplayName: in.DisplayName,
+		PhoneCode:   in.PhoneCode,
 	})
 	if err != nil {
 		return domain.InviteAcceptance{}, inviteSignupUpstreamError(err)
@@ -524,10 +535,16 @@ func invitePreviewUpstreamError(err error) error {
 	return domain.NewError(domain.KindBadGateway, "upstream error")
 }
 
+// phoneCodeRequiredMessage is the upstream text of an accept call that carries no
+// phone code for a phone invitation. The edge answers it with its own wording.
+const phoneCodeRequiredMessage = "phone code is required"
+
 // inviteSignupUpstreamError maps a failed phone-invitation sign-up. An account
 // that already uses the number is a conflict with the stable account_exists code;
 // disabled sign-up is forbidden; a weak password is invalid input; an unusable
-// token is not found. Any other failure is the generic upstream error.
+// token is not found; a wrong, expired or used phone code, or too many attempts,
+// is a bad request that says nothing more. Any other failure is the generic
+// upstream error.
 func inviteSignupUpstreamError(err error) error {
 	st, ok := status.FromError(err)
 	if !ok {
@@ -540,8 +557,36 @@ func inviteSignupUpstreamError(err error) error {
 		return domain.NewError(domain.KindConflict, "account_exists")
 	case codes.FailedPrecondition:
 		return domain.NewError(domain.KindPermissionDenied, st.Message())
+	case codes.Unauthenticated:
+		return domain.NewError(domain.KindInvalidArgument, "the code is wrong or expired")
 	case codes.InvalidArgument:
+		if st.Message() == phoneCodeRequiredMessage {
+			return domain.NewError(domain.KindInvalidArgument, "phone_code is required")
+		}
 		return domain.NewError(domain.KindInvalidArgument, st.Message())
+	}
+	return domain.NewError(domain.KindBadGateway, "upstream error")
+}
+
+// invitePhoneCodeUpstreamError maps a failed request for a phone code. A cooldown
+// or a code still awaiting its guess is rate limited; a deployment without SMS
+// delivery is unavailable (FailedPrecondition); an account that already uses the
+// number is the same account_exists conflict as sign-up; an unusable token is not
+// found. Any other failure is the generic upstream error.
+func invitePhoneCodeUpstreamError(err error) error {
+	st, ok := status.FromError(err)
+	if !ok {
+		return domain.NewError(domain.KindBadGateway, "upstream error")
+	}
+	switch st.Code() {
+	case codes.NotFound:
+		return domain.NewError(domain.KindNotFound, "invite not found")
+	case codes.AlreadyExists:
+		return domain.NewError(domain.KindConflict, "account_exists")
+	case codes.FailedPrecondition:
+		return domain.NewError(domain.KindUnavailable, "phone codes are not available")
+	case codes.ResourceExhausted:
+		return domain.NewError(domain.KindResourceExhausted, "wait before requesting another code")
 	}
 	return domain.NewError(domain.KindBadGateway, "upstream error")
 }

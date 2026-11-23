@@ -33,6 +33,9 @@ const (
 	testAcceptPath    = "/api/v1/public/invites/accept"
 	testPreviewBody   = `{"token":"` + testPendingToken + `"}`
 	testAcceptBody    = `{"token":"` + testPendingToken + `","password":"` + testPassword + `","display_name":"Sara"}`
+	testPhoneCodePath = "/api/v1/public/invites/phone-code"
+	testPhoneCodeBody = `{"token":"` + testPendingToken + `"}`
+	testExpiresAt     = "2026-11-23T10:05:00Z"
 )
 
 // inviteOrgsFake stands in for the OrgService port with only the invitation
@@ -74,6 +77,8 @@ type invitePortFake struct {
 	accepted   domain.InviteAcceptance
 	previews   []string
 	signups    []domain.InviteSignup
+	codeErr    error
+	codeTokens []string
 }
 
 func newInvitePortFake() *invitePortFake {
@@ -100,6 +105,19 @@ func (f *invitePortFake) GetInvitePreview(_ context.Context, token string) (doma
 	return preview, nil
 }
 
+func (f *invitePortFake) RequestInvitePhoneCode(_ context.Context, token string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.codeTokens = append(f.codeTokens, token)
+	if f.codeErr != nil {
+		return "", f.codeErr
+	}
+	if _, ok := f.pending[token]; !ok {
+		return "", domain.NewError(domain.KindNotFound, "invite not found")
+	}
+	return testExpiresAt, nil
+}
+
 func (f *invitePortFake) AcceptInviteWithSignup(_ context.Context, in domain.InviteSignup) (domain.InviteAcceptance, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -117,6 +135,12 @@ func (f *invitePortFake) forwardedPreviews() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.previews...)
+}
+
+func (f *invitePortFake) forwardedCodeRequests() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.codeTokens...)
 }
 
 func (f *invitePortFake) forwardedSignups() []domain.InviteSignup {
@@ -370,6 +394,71 @@ func TestPublicInviteAcceptCreatesTheAccountAndForwardsTheFields(t *testing.T) {
 	}
 }
 
+func TestPublicInvitePhoneCodeAnswersTheExpiryAndNoStore(t *testing.T) {
+	port := newInvitePortFake()
+	base := newInviteTestServer(t, nil, port, nil, nil)
+
+	got := send(t, base, http.MethodPost, testPhoneCodePath, `{"token":"  `+testPendingToken+`  "}`, nil)
+	if got.Status != http.StatusOK {
+		t.Fatalf("status = %d, want 200", got.Status)
+	}
+	if want := `{"expires_at":"` + testExpiresAt + `"}` + "\n"; got.Body != want {
+		t.Fatalf("body = %q, want %q", got.Body, want)
+	}
+	if got.CacheControl != "no-store" {
+		t.Fatalf("Cache-Control = %q, want no-store", got.CacheControl)
+	}
+	if tokens := port.forwardedCodeRequests(); len(tokens) != 1 || tokens[0] != testPendingToken {
+		t.Fatalf("forwarded tokens = %q, want the trimmed token", tokens)
+	}
+}
+
+func TestPublicInvitePhoneCodeAnswersEachFailureAsItsStatus(t *testing.T) {
+	tests := []struct {
+		name     string
+		codeErr  error
+		want     int
+		wantBody string
+	}{
+		{"cooldown is too many requests", domain.NewError(domain.KindResourceExhausted, "wait before requesting another code"), http.StatusTooManyRequests, `{"error":"wait before requesting another code"}`},
+		{"unavailable phone codes", domain.NewError(domain.KindUnavailable, "phone codes are not available"), http.StatusServiceUnavailable, `{"error":"phone codes are not available"}`},
+		{"existing account is account_exists", domain.NewError(domain.KindConflict, "account_exists"), http.StatusConflict, `{"error":"account_exists"}`},
+		{"unusable token is not found", domain.NewError(domain.KindNotFound, "invite not found"), http.StatusNotFound, `{"error":"invite not found"}`},
+		{"a token echoed in a message is redacted", domain.NewError(domain.KindBadGateway, "bad invite "+testPendingToken), http.StatusBadGateway, `{"error":"bad invite [redacted]"}`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			port := newInvitePortFake()
+			port.codeErr = tc.codeErr
+			base := newInviteTestServer(t, nil, port, nil, nil)
+
+			got := send(t, base, http.MethodPost, testPhoneCodePath, testPhoneCodeBody, nil)
+			if got.Status != tc.want || got.Body != tc.wantBody+"\n" {
+				t.Fatalf("got %d %q, want %d %q", got.Status, got.Body, tc.want, tc.wantBody)
+			}
+			if strings.Contains(got.Body, testPendingToken) {
+				t.Fatalf("response body carries the invitation token: %q", got.Body)
+			}
+		})
+	}
+}
+
+// The phone code travels in the accept body and reaches the port unchanged.
+func TestPublicInviteAcceptForwardsThePhoneCode(t *testing.T) {
+	port := newInvitePortFake()
+	base := newInviteTestServer(t, nil, port, nil, nil)
+	body := `{"token":"` + testPendingToken + `","password":"` + testPassword + `","display_name":"Sara","phone_code":"123456"}`
+
+	got := send(t, base, http.MethodPost, testAcceptPath, body, nil)
+	if got.Status != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", got.Status)
+	}
+	signups := port.forwardedSignups()
+	if len(signups) != 1 || signups[0] != (domain.InviteSignup{Token: testPendingToken, Password: testPassword, DisplayName: "Sara", PhoneCode: "123456"}) {
+		t.Fatalf("forwarded signups = %+v", signups)
+	}
+}
+
 func TestPublicInviteAcceptAnswersEachFailureAsItsStatus(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -384,6 +473,8 @@ func TestPublicInviteAcceptAnswersEachFailureAsItsStatus(t *testing.T) {
 		{"unusable token is not found", `{"token":"` + testUnknownToken + `","password":"` + testPassword + `"}`, nil, http.StatusNotFound, `{"error":"invite not found"}`},
 		{"malformed json is a bad request", `{"token":`, nil, http.StatusBadRequest, `{"error":"invalid json"}`},
 		{"a token echoed in a message is redacted", testAcceptBody, domain.NewError(domain.KindInvalidArgument, "bad invite "+testPendingToken), http.StatusBadRequest, `{"error":"bad invite [redacted]"}`},
+		{"a wrong or expired phone code is a bad request", testAcceptBody, domain.NewError(domain.KindInvalidArgument, "the code is wrong or expired"), http.StatusBadRequest, `{"error":"the code is wrong or expired"}`},
+		{"a missing phone code is a bad request", testAcceptBody, domain.NewError(domain.KindInvalidArgument, "phone_code is required"), http.StatusBadRequest, `{"error":"phone_code is required"}`},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -417,6 +508,9 @@ func TestPublicInviteRoutesRequireTheTokenInTheBody(t *testing.T) {
 		{"accept without a token", testAcceptPath, `{"password":"` + testPassword + `"}`, `{"error":"token is required"}`},
 		{"accept with a blank token", testAcceptPath, `{"token":" ","password":"` + testPassword + `"}`, `{"error":"token is required"}`},
 		{"accept with malformed json", testAcceptPath, `{"token":`, `{"error":"invalid json"}`},
+		{"phone code without a token", testPhoneCodePath, `{}`, `{"error":"token is required"}`},
+		{"phone code with a blank token", testPhoneCodePath, `{"token":"   "}`, `{"error":"token is required"}`},
+		{"phone code with malformed json", testPhoneCodePath, `{"token":`, `{"error":"invalid json"}`},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -427,7 +521,7 @@ func TestPublicInviteRoutesRequireTheTokenInTheBody(t *testing.T) {
 			if got.Status != http.StatusBadRequest || got.Body != tc.want+"\n" {
 				t.Fatalf("got %d %q, want 400 %q", got.Status, got.Body, tc.want)
 			}
-			if len(port.forwardedPreviews()) != 0 || len(port.forwardedSignups()) != 0 {
+			if len(port.forwardedPreviews()) != 0 || len(port.forwardedSignups()) != 0 || len(port.forwardedCodeRequests()) != 0 {
 				t.Fatal("the invitation port was asked for an invalid request")
 			}
 		})
@@ -483,12 +577,14 @@ func TestPublicInviteRoutesUseTheirOwnPerIPBudgets(t *testing.T) {
 
 	send(t, base, http.MethodPost, testPreviewPath, testPreviewBody, nil)
 	send(t, base, http.MethodPost, testAcceptPath, testAcceptBody, nil)
+	send(t, base, http.MethodPost, testPhoneCodePath, testPhoneCodeBody, nil)
 
 	wantKeys := []string{
 		ratelimit.KeyForIP("127.0.0.1", routeInvitePreview),
 		ratelimit.KeyForIP("127.0.0.1", routeInviteSignupAccept),
+		ratelimit.KeyForIP("127.0.0.1", routeInvitePhoneCode),
 	}
-	if len(limiter.keys) != 2 || limiter.keys[0] != wantKeys[0] || limiter.keys[1] != wantKeys[1] {
+	if len(limiter.keys) != 3 || limiter.keys[0] != wantKeys[0] || limiter.keys[1] != wantKeys[1] || limiter.keys[2] != wantKeys[2] {
 		t.Fatalf("limiter keys = %v, want %v", limiter.keys, wantKeys)
 	}
 	if limiter.policies[0] != domain.IPRoutePolicy(routeInvitePreview, domain.InvitePreviewIPLimit) {
@@ -496,6 +592,34 @@ func TestPublicInviteRoutesUseTheirOwnPerIPBudgets(t *testing.T) {
 	}
 	if limiter.policies[1] != domain.IPRoutePolicy(routeInviteSignupAccept, domain.InviteSignupAcceptIPLimit) {
 		t.Fatalf("accept policy = %+v", limiter.policies[1])
+	}
+	if limiter.policies[2] != domain.IPRoutePolicy(routeInvitePhoneCode, domain.InvitePhoneCodeIPLimit) {
+		t.Fatalf("phone code policy = %+v", limiter.policies[2])
+	}
+}
+
+// Each code request sends an SMS, so the phone-code route stops at its own budget
+// and answers 429 with the same body every other limited route uses.
+func TestPublicInvitePhoneCodeIsRateLimitedPerIP(t *testing.T) {
+	limiter := ratelimit.New(ratelimiting.NewMemoryLimiter())
+	port := newInvitePortFake()
+	base := newInviteTestServer(t, nil, port, limiter, nil)
+
+	for i := 0; i < domain.InvitePhoneCodeIPLimit; i++ {
+		got := send(t, base, http.MethodPost, testPhoneCodePath, testPhoneCodeBody, nil)
+		if got.Status != http.StatusOK {
+			t.Fatalf("request %d status = %d, want 200", i+1, got.Status)
+		}
+	}
+	got := send(t, base, http.MethodPost, testPhoneCodePath, testPhoneCodeBody, nil)
+	if got.Status != http.StatusTooManyRequests || got.Body != `{"error":"rate limit exceeded"}`+"\n" {
+		t.Fatalf("status = %d body = %q, want 429 rate limit exceeded", got.Status, got.Body)
+	}
+	if got.RetryAfter == "" {
+		t.Fatal("retry-after is missing")
+	}
+	if n := len(port.forwardedCodeRequests()); n != domain.InvitePhoneCodeIPLimit {
+		t.Fatalf("port asked %d times, want %d: the limited request must not reach the port", n, domain.InvitePhoneCodeIPLimit)
 	}
 }
 

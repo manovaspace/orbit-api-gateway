@@ -1439,6 +1439,8 @@ paths:
         invitation's number is the invited number and is not verified. If an account
         already uses the invited number or email the answer is 409 `account_exists`: that
         person signs in and accepts with POST /api/v1/invites/accept instead.
+        A phone invitation also needs `phone_code`, the one-time code
+        POST /api/v1/public/invites/phone-code sent to the invited number.
       security: []
       requestBody:
         required: true
@@ -1454,7 +1456,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/InviteSignupAccepted"
         "400":
-          description: Invalid JSON, the token or password is missing, or the password is shorter than 8 characters
+          description: Invalid JSON, the token or password is missing, the password is shorter than 8 characters, or a phone invitation has no phone_code, or its phone_code is wrong, expired or used
           content:
             application/json:
               schema:
@@ -1485,6 +1487,72 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "502":
           description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /api/v1/public/invites/phone-code:
+    post:
+      operationId: invitePhoneCodeRequest
+      summary: Send the one-time code a phone invitation needs before sign-up
+      description: >
+        Public. The token travels in the JSON body, never in the URL. Sends a
+        one-time code by SMS to the number of a phone invitation; the code is the
+        `phone_code` that POST /api/v1/public/invites/accept requires. A new code is
+        refused with 429 until 60 seconds after the last one, and also while the
+        newest code has a failed guess and has not yet expired. The answer carries
+        only the expiry, never the code or the number. Per-IP budget 5 a minute.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvitePhoneCodeRequest"
+      responses:
+        "200":
+          description: Code sent
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitePhoneCodeSent"
+        "400":
+          description: Invalid JSON, or the token is missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Invitation not found, expired or no longer pending, or it is an email invitation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: An account already uses the invited number; the person signs in and calls POST /api/v1/invites/accept
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: A code was sent recently, or the newest code has a failed guess and has not expired; wait before requesting another code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Upstream orbit-auth failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: Phone codes are not available on this deployment
           content:
             application/json:
               schema:
@@ -3410,6 +3478,29 @@ components:
           description: At least 8 characters. A shorter password is 400.
         display_name:
           type: string
+        phone_code:
+          type: string
+          writeOnly: true
+          description: The one-time code POST /api/v1/public/invites/phone-code sent to the invited number. Required for a phone invitation, ignored for an email invitation. Never log.
+    InvitePhoneCodeRequest:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          format: password
+          writeOnly: true
+          description: Bearer secret, never log.
+    InvitePhoneCodeSent:
+      type: object
+      required:
+        - expires_at
+      properties:
+        expires_at:
+          type: string
+          format: date-time
+          description: When the code stops being valid.
     InvitePreview:
       type: object
       required:
