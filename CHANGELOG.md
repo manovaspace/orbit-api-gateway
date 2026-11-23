@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0](https://github.com/manovaspace/orbit-api-gateway/compare/v0.10.3...v0.11.0) (2026-11-22)
+
+
+### Features
+
+* **auth:** routes for username and Google sign-in ([#96](https://github.com/manovaspace/orbit-api-gateway/issues/96)) ([b9350ac](https://github.com/manovaspace/orbit-api-gateway/commit/b9350acebdc3e2ec423420a28ce2a110b37b3c06))
+* staff organization routes and invitation pass-through ([#98](https://github.com/manovaspace/orbit-api-gateway/issues/98)) ([93e4589](https://github.com/manovaspace/orbit-api-gateway/commit/93e458994b079a86d5fea449fc988c2fdcbb0526))
+* staff users, account states, Google invitations and sign-in methods ([#99](https://github.com/manovaspace/orbit-api-gateway/issues/99)) ([c047968](https://github.com/manovaspace/orbit-api-gateway/commit/c0479681081b01b8f6bf1353e2c4180ec1cc5a1c))
+
 ## [0.10.3](https://github.com/manovaspace/orbit-api-gateway/compare/v0.10.2...v0.10.3) (2026-11-21)
 
 
