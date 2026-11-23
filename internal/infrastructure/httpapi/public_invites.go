@@ -13,6 +13,7 @@ import (
 const (
 	routeInvitePreview      = "/api/v1/public/invites/preview"
 	routeInviteSignupAccept = "/api/v1/public/invites/accept"
+	routeInvitePhoneCode    = "/api/v1/public/invites/phone-code"
 )
 
 // The invitation token is a bearer secret. It is never logged, it is never part of
@@ -34,6 +35,7 @@ func (h *handlers) publicInviteRoutes() []publicInviteRoute {
 	return []publicInviteRoute{
 		{method: http.MethodPost, template: routeInvitePreview, budget: domain.InvitePreviewIPLimit, handler: h.invitePreview},
 		{method: http.MethodPost, template: routeInviteSignupAccept, budget: domain.InviteSignupAcceptIPLimit, handler: h.inviteSignupAccept},
+		{method: http.MethodPost, template: routeInvitePhoneCode, budget: domain.InvitePhoneCodeIPLimit, handler: h.invitePhoneCode},
 	}
 }
 
@@ -45,6 +47,11 @@ type inviteSignupBody struct {
 	Token       string `json:"token"`
 	Password    string `json:"password"`
 	DisplayName string `json:"display_name"`
+	PhoneCode   string `json:"phone_code"`
+}
+
+type invitePhoneCodeJSON struct {
+	ExpiresAt string `json:"expires_at"`
 }
 
 type invitePreviewJSON struct {
@@ -94,6 +101,27 @@ func (h *handlers) invitePreview(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// invitePhoneCode sends the one-time code a phone invitation needs before sign-up.
+// The code and the number never appear in the answer, which is never cacheable.
+func (h *handlers) invitePhoneCode(w http.ResponseWriter, r *http.Request) {
+	var body inviteTokenBody
+	if !decodeJSONBody(w, r, &body) {
+		return
+	}
+	token := strings.TrimSpace(body.Token)
+	if token == "" {
+		writeAppError(w, domain.NewError(domain.KindInvalidArgument, "token is required"))
+		return
+	}
+	expiresAt, err := h.svc.RequestInvitePhoneCode(r.Context(), token)
+	if err != nil {
+		writeInviteError(w, token, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, invitePhoneCodeJSON{ExpiresAt: expiresAt})
+}
+
 // inviteSignupAccept creates the account for a phone invitation, sets its password
 // and display name, and joins the organization with the invited tier.
 func (h *handlers) inviteSignupAccept(w http.ResponseWriter, r *http.Request) {
@@ -110,6 +138,7 @@ func (h *handlers) inviteSignupAccept(w http.ResponseWriter, r *http.Request) {
 		Token:       token,
 		Password:    body.Password,
 		DisplayName: body.DisplayName,
+		PhoneCode:   body.PhoneCode,
 	})
 	if err != nil {
 		writeInviteError(w, token, err)

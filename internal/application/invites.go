@@ -12,6 +12,12 @@ func (s *Service) GetInvitePreview(ctx context.Context, token string) (domain.In
 	return s.invites.GetInvitePreview(ctx, token)
 }
 
+// RequestInvitePhoneCode sends the one-time code for a phone invitation. It never
+// returns the code or the number.
+func (s *Service) RequestInvitePhoneCode(ctx context.Context, token string) (string, error) {
+	return s.invites.RequestInvitePhoneCode(ctx, token)
+}
+
 // AcceptInviteWithSignup creates the account for a phone invitation and joins its
 // organization.
 func (s *Service) AcceptInviteWithSignup(ctx context.Context, in domain.InviteSignup) (domain.InviteAcceptance, error) {

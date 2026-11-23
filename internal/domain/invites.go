@@ -41,6 +41,9 @@ type InviteSignup struct {
 	Token       string
 	Password    string
 	DisplayName string
+	// PhoneCode is the one-time code RequestInvitePhoneCode sent to the invited
+	// number. Required for a phone invitation; ignored for an email invitation.
+	PhoneCode string
 }
 
 // InviteAcceptance is the account a phone invitation created and the organization
@@ -61,6 +64,9 @@ type InviteAcceptance struct {
 type InviteService interface {
 	// GetInvitePreview returns what a pending, unexpired invitation grants.
 	GetInvitePreview(ctx context.Context, token string) (InvitePreview, error)
+	// RequestInvitePhoneCode sends the one-time code for a phone invitation and
+	// returns when the code stops being valid, as an RFC 3339 string.
+	RequestInvitePhoneCode(ctx context.Context, token string) (expiresAt string, err error)
 	// AcceptInviteWithSignup creates the account for a phone invitation and joins
 	// its organization.
 	AcceptInviteWithSignup(ctx context.Context, in InviteSignup) (InviteAcceptance, error)
