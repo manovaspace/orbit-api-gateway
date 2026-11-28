@@ -6,8 +6,8 @@ require (
 	github.com/gofiber/fiber/v3 v3.7.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/manovaspace/orbit-auth v0.12.1-0.20261123051454-7eced23f755f
-	github.com/manovaspace/orbit-kit v0.1.0
-	github.com/redis/go-redis/v9 v9.23.0
+	github.com/manovaspace/orbit-kit v0.1.1
+	github.com/redis/go-redis/v9 v9.24.0
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/sdk v1.47.0
 	golang.org/x/text v0.44.0
