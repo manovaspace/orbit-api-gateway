@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0](https://github.com/manovaspace/orbit-api-gateway/compare/v0.11.0...v0.12.0) (2026-11-28)
+
+
+### Features
+
+* **invites:** request a phone invitation code and pass it on accept ([a2fd447](https://github.com/manovaspace/orbit-api-gateway/commit/a2fd44734fba83e902b8da3ed1baab4f3677a717))
+* **invites:** request a phone invitation code and pass it on accept ([678d8a5](https://github.com/manovaspace/orbit-api-gateway/commit/678d8a57c6197ba2d36e35bf77bc85d7882da4f3)), closes [#100](https://github.com/manovaspace/orbit-api-gateway/issues/100)
+
 ## [0.11.0](https://github.com/manovaspace/orbit-api-gateway/compare/v0.10.3...v0.11.0) (2026-11-22)
 
 
